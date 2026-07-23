@@ -1,0 +1,99 @@
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: #121212;
+  color: #fff;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.app { min-height: 100vh; }
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 16px 24px;
+  border-bottom: 1px solid #282828;
+}
+
+.logo { font-weight: 800; font-size: 20px; color: #1DB954; }
+
+.nav { display: flex; gap: 16px; }
+.nav a { text-decoration: none; color: #b3b3b3; font-size: 14px; font-weight: 600; }
+.nav a.active { color: #fff; }
+
+.main {
+  padding: 24px;
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.card { max-width: 520px; padding: 24px; background: #181818; border-radius: 16px; }
+.card.wide { max-width: none; }
+
+.label { display: block; margin: 16px 0 6px; font-size: 13px; color: #b3b3b3; }
+.input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #333;
+  background: #242424;
+  color: #fff;
+}
+.btn {
+  margin-top: 20px;
+  width: 100%;
+  padding: 12px 0;
+  border-radius: 24px;
+  border: none;
+  background: #1DB954;
+  color: #000;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn-ghost {
+  margin-top: 10px;
+  width: 100%;
+  padding: 10px 0;
+  border-radius: 24px;
+  border: 1px solid #444;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+.btn-small {
+  padding: 8px 16px;
+  border-radius: 20px;
+  border: none;
+  background: #1DB954;
+  color: #000;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.progress-outer {
+  position: relative;
+  height: 22px;
+  background: #242424;
+  border-radius: 11px;
+  margin-top: 16px;
+  overflow: hidden;
+}
+.progress-inner { height: 100%; background: #1DB954; transition: width .2s; }
+.progress-text { position: absolute; inset: 0; text-align: center; font-size: 12px; line-height: 22px; }
+
+.error-state { color: #ef4444; font-size: 14px; padding: 8px 0; }
+.empty-state { color: #6a6a6a; font-size: 14px; padding: 24px 0; }
+
+.tracks-table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13px; }
+.tracks-table th {
+  text-align: left; color: #b3b3b3; font-weight: 600; padding: 8px;
+  border-bottom: 1px solid #282828;
+}
+.tracks-table td { padding: 8px; border-bottom: 1px solid #202020; }

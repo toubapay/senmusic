@@ -82,9 +82,11 @@ artistRouter.post("/v1/artist/tracks", requireAuth, requireArtist, async (req, r
       [trackId, req.artist.id]
     );
 
-    await client.query("COMMIT");
-
-    // V4 signed PUT URL — browser uploads straight to GCS
+    // V4 signed PUT URL — browser uploads straight to GCS. Signed BEFORE
+    // COMMIT: this is an external call that can fail (GCS down, IAM
+    // misconfigured), and if it fails after commit the track row would be
+    // permanently stuck in 'processing' with no upload URL ever handed
+    // out — the catch block's ROLLBACK is a no-op once already committed.
     const objectName = `originals/${trackId}/master${ext}`;
     const [uploadUrl] = await storage
       .bucket(ORIGINALS_BUCKET)
@@ -96,6 +98,8 @@ artistRouter.post("/v1/artist/tracks", requireAuth, requireArtist, async (req, r
         contentType,
         extensionHeaders: { "x-goog-content-length-range": `0,${MAX_SIZE_BYTES}` },
       });
+
+    await client.query("COMMIT");
 
     res.status(201).json({ trackId, uploadUrl, contentType });
   } catch (e) {

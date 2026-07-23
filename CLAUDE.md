@@ -40,8 +40,9 @@ assembled into one working repo.
   src/hooks/usePlayTracking.js
   src/screens/PlayerScreen.jsx
   src/offline/offlineManager.js
-/web/dashboard/               # React artist dashboard
-  ArtistUpload.jsx
+/web/dashboard/               # React artist dashboard (Vite SPA)
+  src/components/UploadForm.jsx
+  src/pages/Tracks.jsx
 /web/player/                  # React listener web app (search, HLS playback,
                                # subscriptions) — separate origin from the API,
                                # a Vite SPA, not part of the original target
@@ -71,8 +72,11 @@ assembled into one working repo.
   build); both now exist
 - Deployment — every service targeted GCP already but only the transcoder
   had a deploy doc; see the root `DEPLOY.md` for the full order, and each
-  service/app's own `DEPLOY.md` for specifics (`web/dashboard`'s notes it
-  isn't buildable yet, same reason it wasn't in "Known gaps" until now)
+  service/app's own `DEPLOY.md` for specifics
+- `web/dashboard` — was a loose `ArtistUpload.jsx` with no app shell; now a
+  real Vite SPA (upload flow, a track-status table, the same token-paste
+  Settings page as web/player) and its `DEPLOY.md` has real steps instead
+  of a "not buildable yet" note
 
 ## Conventions already established in the code — keep these
 - All money in XOF as integers (whole francs), never floats
