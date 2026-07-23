@@ -4,6 +4,8 @@
  */
 
 import "dotenv/config";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import express from "express";
 // Patches Express's routing so a rejected/thrown promise in an async handler
 // reaches the error middleware below instead of hanging the client forever
@@ -29,6 +31,12 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // PayDunya IPN posts form-encoded `data`
 
 app.get("/healthz", (req, res) => res.json({ ok: true }));
+
+// Manual test console (public/test-console.html) — same-origin so it can
+// call the routes below with no CORS setup. Dev-only; nothing in here
+// touches production traffic.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+app.use(express.static(path.join(__dirname, "public")));
 
 app.use(streamingRouter);
 app.use(playsRouter);

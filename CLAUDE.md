@@ -76,7 +76,12 @@ docker compose up -d db            # Postgres, schema + migrations auto-applied 
 cd services/api && npm install && npm start   # or: docker compose up api
 curl localhost:8090/healthz        # (host port from docker-compose.yml; 8080 if run directly)
 ```
-No test suite yet — verify manually against the running API.
+No automated test suite yet. For manual testing, open
+`services/api/public/test-console.html` (served by the API itself at
+`/test-console.html`, same-origin so no CORS setup is needed) — it has a
+form for every route across all six routers, plus a client-side JWT
+generator (paste your `JWT_SECRET` + any UUID as the user id) since there's
+no login route yet to issue real session tokens.
 
 ## What NOT to change without asking
 - The royalty pool formula in `compute-royalties.js` (pro-rata model, already reasoned through)

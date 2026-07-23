@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>ProMusic API Test Console</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --text: #1a1d21; --muted: #6b7280;
+    --border: #e2e5e9; --accent: #5b47e0; --accent-text: #ffffff;
+    --ok: #1a7f37; --err: #c62828; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181d; --card: #1e2127; --text: #e6e8eb; --muted: #9aa1ab;
+      --border: #30343c; --accent: #8577f5; --accent-text: #10121a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  h1 { font-size: 18px; margin: 0 0 2px; }
+  .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 16px; max-width: 1400px; margin: 0 auto; }
+  .top { max-width: 1400px; margin: 0 auto 16px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px; grid-column: span 1;
+  }
+  .card.wide { grid-column: 1 / -1; }
+  .card h2 { font-size: 14px; margin: 0 0 4px; }
+  .card .note { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .row.top-row { max-width: 1400px; margin: 0 auto 8px; align-items: center; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+  .field { flex: 1 1 160px; min-width: 120px; }
+  input, select {
+    width: 100%; padding: 7px 9px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); font: inherit;
+  }
+  input[type=checkbox] { width: auto; }
+  button {
+    background: var(--accent); color: var(--accent-text); border: none; border-radius: 6px;
+    padding: 8px 14px; font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap;
+  }
+  button:hover { opacity: 0.9; }
+  button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  pre {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px; font: 12px/1.4 var(--mono); overflow-x: auto; max-height: 260px;
+    white-space: pre-wrap; word-break: break-word; margin: 8px 0 0;
+  }
+  .status { font-family: var(--mono); font-weight: 700; }
+  .status.ok { color: var(--ok); }
+  .status.err { color: var(--err); }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px;
+    font-weight: 600; margin-left: 8px;
+  }
+  .badge.ok { background: rgba(26,127,55,.15); color: var(--ok); }
+  .badge.err { background: rgba(198,40,40,.15); color: var(--err); }
+  .links a { display: block; font: 12px var(--mono); color: var(--accent); word-break: break-all; margin-top: 4px; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1>ProMusic API Test Console</h1>
+  <p class="subtitle">
+    Talks to whichever origin serves this file (same-origin, no CORS setup needed).
+    Covers every route in <code>routes/*.js</code>. No login route exists yet, so use
+    the token generator below with any UUID as the user id — for routes that need real
+    rows (a track, an artist, a plan), insert them via <code>psql</code> against your
+    local Postgres first.
+  </p>
+</div>
+
+<div class="row top-row">
+  <div class="field" style="max-width:320px">
+    <label>API base URL</label>
+    <input id="baseUrl" value="" />
+  </div>
+  <div class="field" style="flex:2">
+    <label>Bearer token (used as <code>Authorization</code> on auth'd calls)</label>
+    <input id="token" placeholder="paste or generate below" />
+  </div>
+  <div style="align-self:flex-end">
+    <button class="secondary" onclick="doHealth()">GET /healthz</button>
+    <span id="healthBadge"></span>
+  </div>
+</div>
+
+<div class="grid">
+
+  <div class="card wide">
+    <h2>Test token generator</h2>
+    <p class="note">
+      Signs a real HS256 JWT client-side with Web Crypto, matching what
+      <code>lib/auth.js</code> verifies (<code>{ sub, exp }</code> → <code>req.user.id</code>).
+      Paste the same <code>JWT_SECRET</code> your API process is running with.
+    </p>
+    <div class="row">
+      <div class="field"><label>JWT_SECRET</label><input id="jwtSecret" type="password" /></div>
+      <div class="field"><label>User id (sub) — any UUID</label><input id="userId" /></div>
+      <div class="field" style="flex:0 0 140px"><label>Expires in (min)</label><input id="expMin" type="number" value="60" /></div>
+      <div style="align-self:flex-end">
+        <button class="secondary" onclick="fillRandomUuid()">Random UUID</button>
+        <button onclick="genToken()">Generate token</button>
+      </div>
+    </div>
+    <pre id="out-token">—</pre>
+  </div>
+
+  <div class="card">
+    <h2>Search — GET /v1/search</h2>
+    <p class="note">Unauthenticated. Needs Meilisearch reachable + indexed data.</p>
+    <div class="row">
+      <div class="field"><label>q</label><input id="s-q" value="youssou" /></div>
+      <div class="field" style="flex:0 0 90px"><label>limit</label><input id="s-limit" type="number" value="5" /></div>
+    </div>
+    <button onclick="runSearch()">Send</button>
+    <pre id="out-search">—</pre>
+  </div>
+
+  <div class="card">
+    <h2>Search — GET /v1/search/genre/:genre</h2>
+    <p class="note">Unauthenticated. Most-played tracks in a genre.</p>
+    <div class="row">
+      <div class="field"><label>genre</label><input id="sg-genre" value="mbalax" /></div>
+      <div class="field" style="flex:0 0 90px"><label>limit</label><input id="sg-limit" type="number" value="20" /></div>
+    </div>
+    <button onclick="runSearchGenre()">Send</button>
+    <pre id="out-searchgenre">—</pre>
+  </div>
+
+  <div class="card wide">
+    <h2>Streaming — GET /v1/tracks/:trackId/stream/master.m3u8</h2>
+    <p class="note">
+      Auth required. Needs a <code>ready</code> track in Postgres and its HLS files in GCS.
+      256k variant is stripped server-side for non-premium users. Extracted variant
+      URLs below already carry a signed short-lived stream token (<code>?st=</code>) —
+      open one directly to exercise the unauthenticated variant-playlist route.
+    </p>
+    <div class="row">
+      <div class="field"><label>trackId</label><input id="st-trackid" placeholder="UUID" /></div>
+    </div>
+    <button onclick="runMaster()">Send</button>
+    <pre id="out-master">—</pre>
+    <div class="links" id="out-master-links"></div>
+  </div>
+
+  <div class="card">
+    <h2>Plays — POST /v1/plays</h2>
+    <p class="note">Auth required. Opens a play session.</p>
+    <div class="row">
+      <div class="field"><label>trackId</label><input id="p-trackid" placeholder="UUID" /></div>
+      <div class="field"><label>source</label><input id="p-source" placeholder="e.g. playlist" /></div>
+      <div class="field"><label>device</label><input id="p-device" placeholder="e.g. android" /></div>
+    </div>
+    <button onclick="runPlayStart()">Send</button>
+    <pre id="out-playstart">—</pre>
+  </div>
+
+  <div class="card">
+    <h2>Plays — PATCH /v1/plays/:playId</h2>
+    <p class="note">Auth required. Heartbeat; flips <code>counted</code> at ≥30 000 ms.</p>
+    <div class="row">
+      <div class="field"><label>playId</label><input id="p-playid" placeholder="from above, or paste one" /></div>
+      <div class="field" style="flex:0 0 140px"><label>msPlayed</label><input id="p-ms" type="number" value="31000" /></div>
+    </div>
+    <button onclick="runPlayHeartbeat()">Send</button>
+    <pre id="out-playheartbeat">—</pre>
+  </div>
+
+  <div class="card">
+    <h2>Subscriptions — POST /v1/subscriptions/checkout</h2>
+    <p class="note">Auth required. Needs a row in <code>plans</code> with matching <code>code</code>.</p>
+    <div class="row">
+      <div class="field"><label>planCode</label><input id="sub-plan" placeholder="e.g. premium-monthly" /></div>
+    </div>
+    <button onclick="runCheckout()">Send</button>
+    <pre id="out-checkout">—</pre>
+  </div>
+
+  <div class="card">
+    <h2>Subscriptions — GET /v1/subscriptions/me</h2>
+    <p class="note">Auth required.</p>
+    <button onclick="runSubMe()">Send</button>
+    <pre id="out-subme">—</pre>
+  </div>
+
+  <div class="card">
+    <h2>Subscriptions — POST /v1/webhooks/paydunya</h2>
+    <p class="note">
+      Unauthenticated (IPN). Server always re-confirms with the real PayDunya API via
+      <code>lib/paydunya.js</code>, so without live PayDunya credentials this will fail
+      past body-parsing — useful to confirm the route + JSON body wiring, not to
+      simulate a full payment.
+    </p>
+    <div class="row">
+      <div class="field"><label>token (provider_token)</label><input id="wh-token" /></div>
+    </div>
+    <button onclick="runWebhook()">Send</button>
+    <pre id="out-webhook">—</pre>
+  </div>
+
+  <div class="card wide">
+    <h2>Artist uploads — POST /v1/artist/tracks</h2>
+    <p class="note">Auth required + the user must already own a row in <code>artists</code>.</p>
+    <div class="row">
+      <div class="field"><label>title</label><input id="at-title" value="Test Track" /></div>
+      <div class="field"><label>albumId (optional)</label><input id="at-album" /></div>
+      <div class="field" style="flex:0 0 120px"><label>trackNumber</label><input id="at-num" type="number" /></div>
+      <div class="field"><label>genre</label><input id="at-genre" value="mbalax" /></div>
+      <div class="field" style="flex:0 0 120px">
+        <label>access</label>
+        <select id="at-access"><option value="free">free</option><option value="premium">premium</option></select>
+      </div>
+      <div class="field" style="flex:0 0 100px">
+        <label>explicit</label>
+        <input id="at-explicit" type="checkbox" />
+      </div>
+      <div class="field">
+        <label>contentType</label>
+        <select id="at-type">
+          <option value="audio/wav">audio/wav</option>
+          <option value="audio/x-wav">audio/x-wav</option>
+          <option value="audio/flac">audio/flac</option>
+          <option value="audio/mpeg">audio/mpeg</option>
+        </select>
+      </div>
+      <div class="field" style="flex:0 0 140px"><label>sizeBytes</label><input id="at-size" type="number" value="5000000" /></div>
+    </div>
+    <button onclick="runArtistCreate()">Send</button>
+    <pre id="out-artistcreate">—</pre>
+  </div>
+
+  <div class="card">
+    <h2>Artist uploads — GET /v1/artist/tracks</h2>
+    <p class="note">Auth required. Lists the caller's own tracks.</p>
+    <button onclick="runArtistList()">Send</button>
+    <pre id="out-artistlist">—</pre>
+  </div>
+
+  <div class="card">
+    <h2>Artist uploads — GET /v1/artist/tracks/:id</h2>
+    <p class="note">Auth required. Polls one track's pipeline status.</p>
+    <div class="row">
+      <div class="field"><label>trackId</label><input id="at-poll-id" /></div>
+    </div>
+    <button onclick="runArtistPoll()">Send</button>
+    <pre id="out-artistpoll">—</pre>
+  </div>
+
+  <div class="card">
+    <h2>Offline — POST /v1/offline/downloads</h2>
+    <p class="note">Auth required + active subscription + track must be <code>ready</code>.</p>
+    <div class="row">
+      <div class="field"><label>trackId</label><input id="off-trackid" placeholder="UUID" /></div>
+    </div>
+    <button onclick="runOfflineAuthorize()">Send</button>
+    <pre id="out-offlineauth">—</pre>
+  </div>
+
+  <div class="card">
+    <h2>Offline — GET /v1/offline/licenses</h2>
+    <p class="note">Auth required. The renewal heartbeat; 403 means "purge keys".</p>
+    <button onclick="runOfflineLicenses()">Send</button>
+    <pre id="out-offlinelic">—</pre>
+  </div>
+
+  <div class="card">
+    <h2>Offline — DELETE /v1/offline/downloads/:trackId</h2>
+    <p class="note">Auth required.</p>
+    <div class="row">
+      <div class="field"><label>trackId</label><input id="off-del-trackid" placeholder="UUID" /></div>
+    </div>
+    <button onclick="runOfflineDelete()">Send</button>
+    <pre id="out-offlinedel">—</pre>
+  </div>
+
+</div>
+
+<script>
+document.getElementById("baseUrl").value = location.origin;
+
+function b64url(bytes) {
+  let bin = "";
+  const arr = new Uint8Array(bytes);
+  for (let i = 0; i < arr.length; i++) bin += String.fromCharCode(arr[i]);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function b64urlStr(str) { return b64url(new TextEncoder().encode(str)); }
+
+async function signHS256(payload, secret) {
+  const header = { alg: "HS256", typ: "JWT" };
+  const data = `${b64urlStr(JSON.stringify(header))}.${b64urlStr(JSON.stringify(payload))}`;
+  const key = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(data));
+  return `${data}.${b64url(sig)}`;
+}
+
+function fillRandomUuid() { document.getElementById("userId").value = crypto.randomUUID(); }
+
+async function genToken() {
+  const secret = document.getElementById("jwtSecret").value;
+  const sub = document.getElementById("userId").value.trim();
+  const minutes = Number(document.getElementById("expMin").value) || 60;
+  const out = document.getElementById("out-token");
+  if (!secret || !sub) { out.textContent = "Need both JWT_SECRET and a user id."; return; }
+
+  const now = Math.floor(Date.now() / 1000);
+  const token = await signHS256({ sub, iat: now, exp: now + minutes * 60 }, secret);
+  document.getElementById("token").value = token;
+  out.textContent = token;
+}
+
+function base() { return document.getElementById("baseUrl").value.replace(/\/+$/, ""); }
+function authHeaders() {
+  const t = document.getElementById("token").value.trim();
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
+async function call(pre, method, path, { body, useAuth = true, raw = false } = {}) {
+  const el = typeof pre === "string" ? document.getElementById(pre) : pre;
+  el.textContent = "…";
+  const t0 = performance.now();
+  try {
+    const headers = useAuth ? authHeaders() : {};
+    const opts = { method, headers };
+    if (body !== undefined) {
+      opts.headers["Content-Type"] = "application/json";
+      opts.body = JSON.stringify(body);
+    }
+    const res = await fetch(base() + path, opts);
+    const ms = (performance.now() - t0).toFixed(0);
+    const text = await res.text();
+    let display = text;
+    if (!raw) {
+      try { display = JSON.stringify(JSON.parse(text), null, 2); } catch { /* not JSON, show raw */ }
+    }
+    el.innerHTML = "";
+    const status = document.createElement("div");
+    status.className = "status " + (res.ok ? "ok" : "err");
+    status.textContent = `${method} ${path} → ${res.status} (${ms}ms)`;
+    el.appendChild(status);
+    el.appendChild(document.createTextNode("\n" + display));
+    return { ok: res.ok, status: res.status, text, json: (() => { try { return JSON.parse(text); } catch { return null; } })() };
+  } catch (e) {
+    el.textContent = `Request failed: ${e.message}\n(is the API reachable at ${base()}?)`;
+    return { ok: false, status: 0, text: "", json: null };
+  }
+}
+
+async function doHealth() {
+  const r = await call((() => { const p = document.createElement("pre"); return p; })(), "GET", "/healthz", { useAuth: false });
+  const badge = document.getElementById("healthBadge");
+  badge.className = "badge " + (r.ok ? "ok" : "err");
+  badge.textContent = r.ok ? "reachable" : "unreachable";
+}
+
+const enc = encodeURIComponent;
+
+function runSearch() {
+  const q = document.getElementById("s-q").value;
+  const limit = document.getElementById("s-limit").value;
+  call("out-search", "GET", `/v1/search?q=${enc(q)}&limit=${enc(limit)}`, { useAuth: false });
+}
+function runSearchGenre() {
+  const genre = document.getElementById("sg-genre").value;
+  const limit = document.getElementById("sg-limit").value;
+  call("out-searchgenre", "GET", `/v1/search/genre/${enc(genre)}?limit=${enc(limit)}`, { useAuth: false });
+}
+
+async function runMaster() {
+  const trackId = document.getElementById("st-trackid").value.trim();
+  const r = await call("out-master", "GET", `/v1/tracks/${enc(trackId)}/stream/master.m3u8`, { raw: true });
+  const linksEl = document.getElementById("out-master-links");
+  linksEl.innerHTML = "";
+  if (r.ok) {
+    const urls = [...r.text.matchAll(/^(https?:\/\/\S+\?st=\S+)$/gm)].map((m) => m[1]);
+    for (const u of urls) {
+      const a = document.createElement("a");
+      a.href = u; a.textContent = u; a.target = "_blank";
+      linksEl.appendChild(a);
+    }
+  }
+}
+
+async function runPlayStart() {
+  const body = {
+    trackId: document.getElementById("p-trackid").value.trim(),
+    source: document.getElementById("p-source").value || undefined,
+    device: document.getElementById("p-device").value || undefined,
+  };
+  const r = await call("out-playstart", "POST", "/v1/plays", { body });
+  if (r.ok && r.json?.playId) document.getElementById("p-playid").value = r.json.playId;
+}
+function runPlayHeartbeat() {
+  const playId = document.getElementById("p-playid").value.trim();
+  const msPlayed = Number(document.getElementById("p-ms").value);
+  call("out-playheartbeat", "PATCH", `/v1/plays/${enc(playId)}`, { body: { msPlayed } });
+}
+
+function runCheckout() {
+  const planCode = document.getElementById("sub-plan").value.trim();
+  call("out-checkout", "POST", "/v1/subscriptions/checkout", { body: { planCode } });
+}
+function runSubMe() { call("out-subme", "GET", "/v1/subscriptions/me"); }
+function runWebhook() {
+  const token = document.getElementById("wh-token").value.trim();
+  call("out-webhook", "POST", "/v1/webhooks/paydunya", { body: { token }, useAuth: false });
+}
+
+function runArtistCreate() {
+  const body = {
+    title: document.getElementById("at-title").value.trim(),
+    albumId: document.getElementById("at-album").value || undefined,
+    trackNumber: document.getElementById("at-num").value ? Number(document.getElementById("at-num").value) : undefined,
+    genre: document.getElementById("at-genre").value || undefined,
+    access: document.getElementById("at-access").value,
+    explicit: document.getElementById("at-explicit").checked,
+    contentType: document.getElementById("at-type").value,
+    sizeBytes: Number(document.getElementById("at-size").value),
+  };
+  call("out-artistcreate", "POST", "/v1/artist/tracks", { body }).then((r) => {
+    if (r.ok && r.json?.trackId) document.getElementById("at-poll-id").value = r.json.trackId;
+  });
+}
+function runArtistList() { call("out-artistlist", "GET", "/v1/artist/tracks"); }
+function runArtistPoll() {
+  const id = document.getElementById("at-poll-id").value.trim();
+  call("out-artistpoll", "GET", `/v1/artist/tracks/${enc(id)}`);
+}
+
+function runOfflineAuthorize() {
+  const trackId = document.getElementById("off-trackid").value.trim();
+  call("out-offlineauth", "POST", "/v1/offline/downloads", { body: { trackId } });
+}
+function runOfflineLicenses() { call("out-offlinelic", "GET", "/v1/offline/licenses"); }
+function runOfflineDelete() {
+  const trackId = document.getElementById("off-del-trackid").value.trim();
+  call("out-offlinedel", "DELETE", `/v1/offline/downloads/${enc(trackId)}`);
+}
+
+doHealth();
+</script>
+</body>
+</html>
