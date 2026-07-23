@@ -1,14 +1,43 @@
 # Deploying web/player
 
-A static Vite build — no server needed. Hosted here as a public GCS bucket
-behind Cloud CDN + a global HTTPS load balancer, consistent with the rest of
-the stack's "GCS + Cloud CDN" storage layer (this bucket is public, unlike
-the private HLS bucket — there's nothing sensitive in a compiled SPA).
+A static Vite build — no server needed. Two ways to host it:
 
-If you'd rather skip the load-balancer setup, **Firebase Hosting** (also
-GCP, under the same project) does steps 2-4 for you in one `firebase deploy`
-— reasonable for a first deploy; switch to the GCS+LB path below once you
-need it to share a load balancer with other GCP-native services.
+## No domain yet: Cloud Run
+
+The `Dockerfile` here builds the SPA and serves it with `serve -s` (handles
+the SPA deep-link fallback itself, no load-balancer config needed) — gets a
+working `https://....run.app` URL immediately, no domain/cert/LB required.
+This is the path to use before a domain exists.
+
+```bash
+cd web/player
+API_URL=https://promusic-api-xxxxx.run.app   # the deployed API's URL
+IMAGE=europe-west1-docker.pkg.dev/$PROJECT_ID/promusic/player
+
+gcloud auth configure-docker europe-west1-docker.pkg.dev
+docker build --build-arg VITE_API_BASE_URL=$API_URL -t $IMAGE .
+docker push $IMAGE
+
+gcloud run deploy promusic-player --image $IMAGE \
+  --region europe-west1 --allow-unauthenticated
+```
+
+(`gcloud builds submit --tag` also works if you'd rather not build locally,
+but plain `docker build --build-arg` is the simplest way to get
+`VITE_API_BASE_URL` baked in correctly — Cloud Build's buildpacks path
+doesn't apply here since this repo has an explicit `Dockerfile`.)
+
+Then set the API's `APP_BASE_URL` to the resulting `promusic-player` URL
+(see `services/api/DEPLOY.md`) — same CORS + PayDunya-redirect role either
+way, just a `*.run.app` origin instead of a custom domain for now.
+
+## Once there's a domain: GCS + Cloud CDN + load balancer
+
+More GCP-native, and consistent with the rest of the stack's "GCS + Cloud
+CDN" storage layer (this bucket is public, unlike the private HLS bucket —
+there's nothing sensitive in a compiled SPA). **Firebase Hosting** (also
+GCP, same project) does steps 2-4 below for you in one `firebase deploy` if
+you'd rather skip the load-balancer setup entirely.
 
 ## 1. Build
 

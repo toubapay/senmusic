@@ -3,6 +3,25 @@
 Every piece targets GCP already (see `CLAUDE.md`'s Stack section): Cloud Run
 for compute, Cloud SQL for Postgres, GCS + Cloud CDN for storage/delivery,
 Eventarc for the transcode trigger, Cloud Scheduler for the royalties job.
+
+## Fast path: `scripts/deploy-gcp.sh`
+
+Runs everything below in order, on default `*.run.app` URLs (no domain
+needed yet), and is safe to re-run if a step fails partway through. Needs
+`gcloud` + `docker` already authenticated — Cloud Shell has both.
+
+```bash
+PROJECT_ID=your-project-id ./scripts/deploy-gcp.sh
+```
+
+It deliberately skips PayDunya keys, the CDN signing key, and Meilisearch
+hosting — those need real values/infra decisions it can't make for you (see
+§3 and §5 below). Search/streaming/checkout correctly reach the API and
+fail there until those exist, same as everywhere else this was verified
+locally in this repo's history.
+
+## Manual path, or to understand what the script does
+
 This is the order that avoids circular dependencies (e.g. the API needs the
 Cloud SQL instance and buckets to exist before it can deploy).
 
@@ -20,7 +39,7 @@ Cloud SQL instance and buckets to exist before it can deploy).
    commands; it needs the same `DATABASE_URL` secret as the API
 7. **web/player** — `web/player/DEPLOY.md` (needs the API's URL from step 5
    for its build, and its own URL feeds back into the API's `APP_BASE_URL`)
-8. **web/dashboard** — not buildable yet; see `web/dashboard/DEPLOY.md`
+8. **web/dashboard** — `web/dashboard/DEPLOY.md`, same shape as web/player
 
 ## Cross-cutting things worth knowing before you start
 
