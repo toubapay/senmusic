@@ -7,6 +7,7 @@ import "dotenv/config";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
+import cors from "cors";
 // Patches Express's routing so a rejected/thrown promise in an async handler
 // reaches the error middleware below instead of hanging the client forever
 // (Express 4 doesn't do this on its own, and none of the route files wrap
@@ -26,6 +27,12 @@ process.on("unhandledRejection", (err) => {
 });
 
 const app = express();
+
+// Browser-facing clients (web/player) live on a different origin than the
+// API (see APP_BASE_URL — already used by paydunya.js for the same origin).
+// Mobile apps and server-to-server calls aren't subject to CORS, so this
+// only affects browser fetches.
+app.use(cors({ origin: process.env.APP_BASE_URL, credentials: true }));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // PayDunya IPN posts form-encoded `data`
