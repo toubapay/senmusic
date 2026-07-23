@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: promusic
+      POSTGRES_PASSWORD: promusic
+      POSTGRES_DB: promusic
+    ports:
+      - "5433:5432" # host 5432 already in use on this machine; container-internal port is unaffected
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/00-schema.sql:ro
+      - ./db/migrations/001_offline_downloads.sql:/docker-entrypoint-initdb.d/01-offline_downloads.sql:ro
+      - ./db/migrations/002_play_count_applied.sql:/docker-entrypoint-initdb.d/02-play_count_applied.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U promusic"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./services/api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://promusic:promusic@db:5432/promusic
+    ports:
+      - "8090:8080" # host 8080 already in use on this machine; container listens on 8080 internally
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
