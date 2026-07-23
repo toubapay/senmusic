@@ -62,11 +62,17 @@ assembled into one working repo.
 - `play_count_applied` table — `db/migrations/002_play_count_applied.sql`
 - Environment variables — consolidated in `.env.example`
 - CORS — `web/player` is a genuinely separate-origin browser client (unlike
-  the same-origin test console), so `index.js` now does
-  `app.use(cors({ origin: process.env.APP_BASE_URL, credentials: true }))`.
-  `APP_BASE_URL` was already the env var `paydunya.js` used for the web
-  app's origin; it's now also the CORS allowlist and web/player's dev port
-  (5173) by default
+  the same-origin test console), so `index.js` now allows `APP_BASE_URL`
+  and `ARTIST_DASHBOARD_URL` as CORS origins. `APP_BASE_URL` was already the
+  env var `paydunya.js` used for the web app's origin; it's now also in the
+  CORS allowlist, and web/player's dev port (5173) by default
+- `services/royalties-job` — had no `package.json`/`Dockerfile` (its own
+  header comment's `gcloud run jobs create --source .` had nothing to
+  build); both now exist
+- Deployment — every service targeted GCP already but only the transcoder
+  had a deploy doc; see the root `DEPLOY.md` for the full order, and each
+  service/app's own `DEPLOY.md` for specifics (`web/dashboard`'s notes it
+  isn't buildable yet, same reason it wasn't in "Known gaps" until now)
 
 ## Conventions already established in the code — keep these
 - All money in XOF as integers (whole francs), never floats

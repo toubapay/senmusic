@@ -28,11 +28,12 @@ process.on("unhandledRejection", (err) => {
 
 const app = express();
 
-// Browser-facing clients (web/player) live on a different origin than the
-// API (see APP_BASE_URL — already used by paydunya.js for the same origin).
-// Mobile apps and server-to-server calls aren't subject to CORS, so this
-// only affects browser fetches.
-app.use(cors({ origin: process.env.APP_BASE_URL, credentials: true }));
+// Browser-facing clients live on different origins than the API: web/player
+// at APP_BASE_URL (already used by paydunya.js for the same origin) and
+// web/dashboard at ARTIST_DASHBOARD_URL. Mobile apps and server-to-server
+// calls aren't subject to CORS, so this only affects browser fetches.
+const allowedOrigins = [process.env.APP_BASE_URL, process.env.ARTIST_DASHBOARD_URL].filter(Boolean);
+app.use(cors({ origin: allowedOrigins, credentials: true }));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // PayDunya IPN posts form-encoded `data`

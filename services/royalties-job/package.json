@@ -1,0 +1,15 @@
+{
+  "name": "promusic-royalties-job",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node compute-royalties.js"
+  },
+  "dependencies": {
+    "pg": "^8.12.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
