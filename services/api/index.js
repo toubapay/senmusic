@@ -14,6 +14,7 @@ import cors from "cors";
 // their handlers in try/catch themselves).
 import "express-async-errors";
 import { streamingRouter } from "./routes/streaming.js";
+import { tracksRouter } from "./routes/tracks.js";
 import { playsRouter } from "./routes/plays.js";
 import { subscriptionsRouter } from "./routes/subscriptions.js";
 import { artistRouter } from "./routes/artist-uploads.js";
@@ -47,6 +48,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 app.use(express.static(path.join(__dirname, "public")));
 
 app.use(streamingRouter);
+app.use(tracksRouter);
 app.use(playsRouter);
 app.use(subscriptionsRouter);
 app.use(artistRouter);

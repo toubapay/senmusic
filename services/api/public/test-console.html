@@ -136,6 +136,16 @@
     <pre id="out-searchgenre">—</pre>
   </div>
 
+  <div class="card">
+    <h2>Tracks — GET /v1/tracks/:trackId</h2>
+    <p class="note">Auth required. Metadata (title, artists, album, access) for the player screen.</p>
+    <div class="row">
+      <div class="field"><label>trackId</label><input id="tr-trackid" placeholder="UUID" /></div>
+    </div>
+    <button onclick="runTrackDetail()">Send</button>
+    <pre id="out-trackdetail">—</pre>
+  </div>
+
   <div class="card wide">
     <h2>Streaming — GET /v1/tracks/:trackId/stream/master.m3u8</h2>
     <p class="note">
@@ -375,6 +385,11 @@ function runSearchGenre() {
   const genre = document.getElementById("sg-genre").value;
   const limit = document.getElementById("sg-limit").value;
   call("out-searchgenre", "GET", `/v1/search/genre/${enc(genre)}?limit=${enc(limit)}`, { useAuth: false });
+}
+
+function runTrackDetail() {
+  const trackId = document.getElementById("tr-trackid").value.trim();
+  call("out-trackdetail", "GET", `/v1/tracks/${enc(trackId)}`);
 }
 
 async function runMaster() {
