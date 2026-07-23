@@ -5,6 +5,11 @@
 
 import "dotenv/config";
 import express from "express";
+// Patches Express's routing so a rejected/thrown promise in an async handler
+// reaches the error middleware below instead of hanging the client forever
+// (Express 4 doesn't do this on its own, and none of the route files wrap
+// their handlers in try/catch themselves).
+import "express-async-errors";
 import { streamingRouter } from "./routes/streaming.js";
 import { playsRouter } from "./routes/plays.js";
 import { subscriptionsRouter } from "./routes/subscriptions.js";
@@ -12,11 +17,10 @@ import { artistRouter } from "./routes/artist-uploads.js";
 import { searchRouter } from "./routes/search.js";
 import { offlineRouter } from "./routes/offline.js";
 
-// None of the route files wrap their async handlers, so in Express 4 an
-// unhandled rejection (e.g. Meilisearch/GCS/Postgres transiently down)
-// would otherwise crash the whole process, not just that one request.
+// Last-resort safety net for rejections outside the request/response cycle
+// (e.g. a background timer) — request-path errors are now handled above.
 process.on("unhandledRejection", (err) => {
-  console.error("Unhandled rejection in route handler:", err);
+  console.error("Unhandled rejection outside a request handler:", err);
 });
 
 const app = express();

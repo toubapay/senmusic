@@ -31,8 +31,8 @@ assembled into one working repo.
   lib/cdn-signer.js
   lib/paydunya.js
   lib/meili.js
-  lib/db.js                  # NOT yet built — pg.Pool wrapper, needed by all routes
-  lib/auth.js                 # NOT yet built — requireAuth JWT middleware, needed by all routes
+  lib/db.js                  # pg.Pool wrapper, needed by all routes
+  lib/auth.js                 # requireAuth JWT middleware, needed by all routes
 /services/transcoder/        # from hls-transcoder/ as-is (separate Cloud Run service)
 /services/royalties-job/     # from phase3/royalties/compute-royalties.js (Cloud Run job)
 /mobile/                     # React Native app
@@ -44,15 +44,19 @@ assembled into one working repo.
   ArtistUpload.jsx
 ```
 
-## Known gaps — build these to make the pieces actually run
-- `lib/db.js` — every backend route imports `{ pool }` from here; doesn't exist yet
-- `lib/auth.js` — every backend route imports `requireAuth`; doesn't exist yet
-- `index.js` / app bootstrap — wire all routers into one Express app
-- `offline_keys` table — apply `offline-migration.sql`, and add the
-  `download.m4a` FFmpeg pass described in that file's comments to the transcoder
-- `play_count_applied` table — referenced in `routes/plays.js`'s trailing comment, needs its own migration
-- Environment variables — consolidate every `process.env.X` referenced
-  across the pieces into one `.env.example`
+## Known gaps — all filled; repo runs end-to-end
+- `lib/db.js` — `pg.Pool` wrapper, done
+- `lib/auth.js` — `requireAuth` JWT middleware, done
+- `index.js` — Express bootstrap wiring all six routers, done. Async route
+  handlers are wrapped via `express-async-errors` (imported once in
+  `index.js`) so a rejected promise (DB/Meilisearch/GCS transiently down)
+  reaches the error middleware and returns a 500 instead of hanging the
+  client's connection forever — none of the individual route files need
+  their own try/catch for this
+- `offline_keys` table — `db/migrations/001_offline_downloads.sql`; the
+  transcoder's `download.m4a` FFmpeg pass is in `services/transcoder/index.js`
+- `play_count_applied` table — `db/migrations/002_play_count_applied.sql`
+- Environment variables — consolidated in `.env.example`
 
 ## Conventions already established in the code — keep these
 - All money in XOF as integers (whole francs), never floats
@@ -66,7 +70,13 @@ assembled into one working repo.
 - A play counts toward royalties at >=30s listened, tracked via heartbeat PATCH
 
 ## Build/test commands
-(fill in once package.json / docker-compose exist — not yet established)
+```
+cp .env.example .env               # fill in real secrets/keys
+docker compose up -d db            # Postgres, schema + migrations auto-applied on first boot
+cd services/api && npm install && npm start   # or: docker compose up api
+curl localhost:8090/healthz        # (host port from docker-compose.yml; 8080 if run directly)
+```
+No test suite yet — verify manually against the running API.
 
 ## What NOT to change without asking
 - The royalty pool formula in `compute-royalties.js` (pro-rata model, already reasoned through)
