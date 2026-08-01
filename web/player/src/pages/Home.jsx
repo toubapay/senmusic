@@ -1,16 +1,28 @@
-import React, { useState, useCallback } from "react";
-import { search, searchByGenre } from "../api/client";
+import React, { useState, useCallback, useEffect } from "react";
+import { search, searchByGenre, getRecentlyPlayed } from "../api/client";
+import { usePlayerContext } from "../context/PlayerContext";
+import { useLibrary } from "../hooks/useLibrary";
 import TrackRow from "../components/TrackRow";
+import AddToPlaylistMenu from "../components/AddToPlaylistMenu";
 
 const GENRE_CHIPS = ["mbalax", "afrobeats", "hip-hop", "coupé-décalé", "gospel"];
 
 export default function Home() {
+  const { playQueue } = usePlayerContext();
+  const { likedTrackIds, toggleLike } = useLibrary();
+
   const [q, setQ] = useState("");
   const [results, setResults] = useState(null); // { tracks, artists, albums }
   const [genreResults, setGenreResults] = useState(null);
   const [activeGenre, setActiveGenre] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [addMenuTrack, setAddMenuTrack] = useState(null);
+
+  const [recent, setRecent] = useState(null);
+  useEffect(() => {
+    getRecentlyPlayed(10).then((r) => setRecent(r.tracks)).catch(() => setRecent([]));
+  }, []);
 
   const runSearch = useCallback(async (e) => {
     e?.preventDefault();
@@ -43,8 +55,23 @@ export default function Home() {
     }
   }, []);
 
+  const trackRowProps = {
+    likedTrackIds, onToggleLike: toggleLike, onAddToPlaylist: setAddMenuTrack,
+  };
+
   return (
     <>
+      {recent && recent.length > 0 && (
+        <>
+          <h3 className="section-title" style={{ marginTop: 0 }}>Repris récemment</h3>
+          <ul className="track-list">
+            {recent.map((t) => (
+              <TrackRow key={t.id} track={t} queueTracks={recent} queueSource="recently_played" {...trackRowProps} />
+            ))}
+          </ul>
+        </>
+      )}
+
       <form className="search-form-standalone" onSubmit={runSearch} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
         <input
           className="search-input"
@@ -81,7 +108,13 @@ export default function Home() {
           <h3 className="section-title">Titres</h3>
           {results.tracks.length === 0
             ? <p className="empty-state">Aucun résultat.</p>
-            : <ul className="track-list">{results.tracks.map((t) => <TrackRow key={t.id} track={t} />)}</ul>}
+            : (
+              <ul className="track-list">
+                {results.tracks.map((t) => (
+                  <TrackRow key={t.id} track={t} queueTracks={results.tracks} queueSource="search" {...trackRowProps} />
+                ))}
+              </ul>
+            )}
         </>
       )}
 
@@ -90,9 +123,17 @@ export default function Home() {
           <h3 className="section-title">{activeGenre}</h3>
           {genreResults.length === 0
             ? <p className="empty-state">Aucun titre dans ce genre.</p>
-            : <ul className="track-list">{genreResults.map((t) => <TrackRow key={t.id} track={t} />)}</ul>}
+            : (
+              <ul className="track-list">
+                {genreResults.map((t) => (
+                  <TrackRow key={t.id} track={t} queueTracks={genreResults} queueSource="genre" {...trackRowProps} />
+                ))}
+              </ul>
+            )}
         </>
       )}
+
+      {addMenuTrack && <AddToPlaylistMenu track={addMenuTrack} onClose={() => setAddMenuTrack(null)} />}
     </>
   );
 }

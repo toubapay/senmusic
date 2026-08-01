@@ -292,6 +292,136 @@
     <pre id="out-offlinedel">—</pre>
   </div>
 
+  <div class="card">
+    <h2>Plays — GET /v1/plays/recent</h2>
+    <p class="note">Auth required. Deduped to one row per track (latest play), newest first.</p>
+    <div class="row">
+      <div class="field" style="flex:0 0 90px"><label>limit</label><input id="pr-limit" type="number" value="20" /></div>
+    </div>
+    <button onclick="runPlaysRecent()">Send</button>
+    <pre id="out-playsrecent">—</pre>
+  </div>
+
+  <div class="card">
+    <h2>Playlists — POST /v1/playlists</h2>
+    <p class="note">Auth required. Creates a playlist owned by the caller.</p>
+    <div class="row">
+      <div class="field"><label>title</label><input id="pl-title" value="My Mix" /></div>
+      <div class="field"><label>description</label><input id="pl-desc" /></div>
+      <div class="field" style="flex:0 0 100px"><label>isPublic</label>
+        <select id="pl-public"><option value="true">true</option><option value="false">false</option></select>
+      </div>
+    </div>
+    <button onclick="runPlaylistCreate()">Send</button>
+    <pre id="out-playlistcreate">—</pre>
+  </div>
+
+  <div class="card">
+    <h2>Playlists — GET /v1/playlists/mine</h2>
+    <p class="note">Auth required.</p>
+    <button onclick="runPlaylistsMine()">Send</button>
+    <pre id="out-playlistsmine">—</pre>
+  </div>
+
+  <div class="card wide">
+    <h2>Playlists — GET /v1/playlists/:playlistId</h2>
+    <p class="note">Auth required. Visible if owner or public; 404 either way otherwise (no existence leak).</p>
+    <div class="row">
+      <div class="field"><label>playlistId</label><input id="pl-id" placeholder="UUID" /></div>
+    </div>
+    <button onclick="runPlaylistDetail()">Send</button>
+    <pre id="out-playlistdetail">—</pre>
+  </div>
+
+  <div class="card">
+    <h2>Playlists — PATCH /v1/playlists/:playlistId</h2>
+    <p class="note">Auth required, owner only.</p>
+    <div class="row">
+      <div class="field"><label>playlistId</label><input id="pl-patch-id" placeholder="UUID" /></div>
+      <div class="field"><label>title</label><input id="pl-patch-title" /></div>
+    </div>
+    <button onclick="runPlaylistUpdate()">Send</button>
+    <pre id="out-playlistupdate">—</pre>
+  </div>
+
+  <div class="card">
+    <h2>Playlists — DELETE /v1/playlists/:playlistId</h2>
+    <p class="note">Auth required, owner only.</p>
+    <div class="row">
+      <div class="field"><label>playlistId</label><input id="pl-del-id" placeholder="UUID" /></div>
+    </div>
+    <button onclick="runPlaylistDelete()">Send</button>
+    <pre id="out-playlistdelete">—</pre>
+  </div>
+
+  <div class="card">
+    <h2>Playlists — POST /v1/playlists/:playlistId/tracks</h2>
+    <p class="note">Auth required, owner only. Idempotent (ON CONFLICT DO NOTHING).</p>
+    <div class="row">
+      <div class="field"><label>playlistId</label><input id="plt-id" placeholder="UUID" /></div>
+      <div class="field"><label>trackId</label><input id="plt-trackid" placeholder="UUID" /></div>
+    </div>
+    <button onclick="runPlaylistAddTrack()">Send</button>
+    <pre id="out-playlistaddtrack">—</pre>
+  </div>
+
+  <div class="card">
+    <h2>Playlists — DELETE .../tracks/:trackId</h2>
+    <p class="note">Auth required, owner only.</p>
+    <div class="row">
+      <div class="field"><label>playlistId</label><input id="pltd-id" placeholder="UUID" /></div>
+      <div class="field"><label>trackId</label><input id="pltd-trackid" placeholder="UUID" /></div>
+    </div>
+    <button onclick="runPlaylistRemoveTrack()">Send</button>
+    <pre id="out-playlistremovetrack">—</pre>
+  </div>
+
+  <div class="card wide">
+    <h2>Playlists — PATCH .../tracks/:trackId/reorder</h2>
+    <p class="note">Auth required, owner only. afterTrackId empty/omitted = move to front.</p>
+    <div class="row">
+      <div class="field"><label>playlistId</label><input id="plr-id" placeholder="UUID" /></div>
+      <div class="field"><label>trackId (moving)</label><input id="plr-trackid" placeholder="UUID" /></div>
+      <div class="field"><label>afterTrackId</label><input id="plr-after" placeholder="UUID or empty" /></div>
+    </div>
+    <button onclick="runPlaylistReorder()">Send</button>
+    <pre id="out-playlistreorder">—</pre>
+  </div>
+
+  <div class="card">
+    <h2>Library — POST /v1/library/tracks/:trackId</h2>
+    <p class="note">Auth required. Like a track; idempotent.</p>
+    <div class="row">
+      <div class="field"><label>trackId</label><input id="lib-like-trackid" placeholder="UUID" /></div>
+    </div>
+    <button onclick="runLibraryLike()">Send</button>
+    <pre id="out-librarylike">—</pre>
+  </div>
+
+  <div class="card">
+    <h2>Library — DELETE /v1/library/tracks/:trackId</h2>
+    <p class="note">Auth required. Unlike a track.</p>
+    <div class="row">
+      <div class="field"><label>trackId</label><input id="lib-unlike-trackid" placeholder="UUID" /></div>
+    </div>
+    <button onclick="runLibraryUnlike()">Send</button>
+    <pre id="out-libraryunlike">—</pre>
+  </div>
+
+  <div class="card">
+    <h2>Library — GET /v1/library/tracks</h2>
+    <p class="note">Auth required. Liked tracks, newest first.</p>
+    <button onclick="runLibraryTracks()">Send</button>
+    <pre id="out-librarytracks">—</pre>
+  </div>
+
+  <div class="card">
+    <h2>Library — GET /v1/library/tracks/ids</h2>
+    <p class="note">Auth required. Just the ids, for cheap "is this liked" checks.</p>
+    <button onclick="runLibraryIds()">Send</button>
+    <pre id="out-libraryids">—</pre>
+  </div>
+
 </div>
 
 <script>
@@ -462,6 +592,64 @@ function runOfflineDelete() {
   const trackId = document.getElementById("off-del-trackid").value.trim();
   call("out-offlinedel", "DELETE", `/v1/offline/downloads/${enc(trackId)}`);
 }
+
+function runPlaysRecent() {
+  const limit = document.getElementById("pr-limit").value;
+  call("out-playsrecent", "GET", `/v1/plays/recent?limit=${enc(limit)}`);
+}
+
+async function runPlaylistCreate() {
+  const title = document.getElementById("pl-title").value.trim();
+  const description = document.getElementById("pl-desc").value.trim() || null;
+  const isPublic = document.getElementById("pl-public").value === "true";
+  const r = await call("out-playlistcreate", "POST", "/v1/playlists", { body: { title, description, isPublic } });
+  if (r.ok && r.json?.id) {
+    for (const id of ["pl-id", "pl-patch-id", "pl-del-id", "plt-id", "pltd-id", "plr-id"]) {
+      document.getElementById(id).value = r.json.id;
+    }
+  }
+}
+function runPlaylistsMine() { call("out-playlistsmine", "GET", "/v1/playlists/mine"); }
+function runPlaylistDetail() {
+  const id = document.getElementById("pl-id").value.trim();
+  call("out-playlistdetail", "GET", `/v1/playlists/${enc(id)}`);
+}
+function runPlaylistUpdate() {
+  const id = document.getElementById("pl-patch-id").value.trim();
+  const title = document.getElementById("pl-patch-title").value.trim() || null;
+  call("out-playlistupdate", "PATCH", `/v1/playlists/${enc(id)}`, { body: { title } });
+}
+function runPlaylistDelete() {
+  const id = document.getElementById("pl-del-id").value.trim();
+  call("out-playlistdelete", "DELETE", `/v1/playlists/${enc(id)}`);
+}
+function runPlaylistAddTrack() {
+  const id = document.getElementById("plt-id").value.trim();
+  const trackId = document.getElementById("plt-trackid").value.trim();
+  call("out-playlistaddtrack", "POST", `/v1/playlists/${enc(id)}/tracks`, { body: { trackId } });
+}
+function runPlaylistRemoveTrack() {
+  const id = document.getElementById("pltd-id").value.trim();
+  const trackId = document.getElementById("pltd-trackid").value.trim();
+  call("out-playlistremovetrack", "DELETE", `/v1/playlists/${enc(id)}/tracks/${enc(trackId)}`);
+}
+function runPlaylistReorder() {
+  const id = document.getElementById("plr-id").value.trim();
+  const trackId = document.getElementById("plr-trackid").value.trim();
+  const afterTrackId = document.getElementById("plr-after").value.trim() || null;
+  call("out-playlistreorder", "PATCH", `/v1/playlists/${enc(id)}/tracks/${enc(trackId)}/reorder`, { body: { afterTrackId } });
+}
+
+function runLibraryLike() {
+  const trackId = document.getElementById("lib-like-trackid").value.trim();
+  call("out-librarylike", "POST", `/v1/library/tracks/${enc(trackId)}`);
+}
+function runLibraryUnlike() {
+  const trackId = document.getElementById("lib-unlike-trackid").value.trim();
+  call("out-libraryunlike", "DELETE", `/v1/library/tracks/${enc(trackId)}`);
+}
+function runLibraryTracks() { call("out-librarytracks", "GET", "/v1/library/tracks"); }
+function runLibraryIds() { call("out-libraryids", "GET", "/v1/library/tracks/ids"); }
 
 doHealth();
 </script>

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'screens/downloads_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/library_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/subscribe_screen.dart';
 import 'services/offline_manager.dart';
@@ -66,6 +67,7 @@ class _RootShellState extends State<_RootShell> {
   Widget build(BuildContext context) {
     final pages = const [
       HomeScreen(),
+      LibraryScreen(),
       DownloadsScreen(),
       SubscribeScreen(),
       SettingsScreen(),
@@ -86,6 +88,11 @@ class _RootShellState extends State<_RootShell> {
                 icon: Icon(Icons.home_outlined),
                 selectedIcon: Icon(Icons.home),
                 label: 'Accueil',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.library_music_outlined),
+                selectedIcon: Icon(Icons.library_music),
+                label: 'Bibliothèque',
               ),
               NavigationDestination(
                 icon: Icon(Icons.download_outlined),

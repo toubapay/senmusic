@@ -13,8 +13,10 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import Hls from "hls.js";
 import { streamUrl, streamAuthHeader } from "../api/client";
 import { usePlayTracking } from "./usePlayTracking";
+import { usePlayerContext } from "../context/PlayerContext";
 
-export function useAudioPlayer(track) {
+export function useAudioPlayer() {
+  const { currentTrack: track, source, hasNext, next } = usePlayerContext();
   const audioRef = useRef(null);
   const hlsRef = useRef(null);
   const [paused, setPaused] = useState(true);
@@ -25,7 +27,7 @@ export function useAudioPlayer(track) {
   const [error, setError] = useState(null);
 
   const trackId = track?.id;
-  const { onPlaying, onPaused, onEnded } = usePlayTracking(trackId);
+  const { onPlaying, onPaused, onEnded } = usePlayTracking(trackId, source ?? undefined);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -85,7 +87,12 @@ export function useAudioPlayer(track) {
     const onWaiting = () => setBuffering(true);
     const onPlayingEv = () => { setBuffering(false); setPaused(false); onPlaying(); };
     const onPauseEv = () => { setPaused(true); onPaused(); };
-    const onEndedEv = () => { setPaused(true); setPosition(0); onEnded(); };
+    const onEndedEv = () => {
+      setPaused(true);
+      setPosition(0);
+      onEnded();
+      if (hasNext) next();
+    };
 
     audio.addEventListener("loadedmetadata", onLoadedMeta);
     audio.addEventListener("timeupdate", onTimeUpdate);
@@ -101,7 +108,7 @@ export function useAudioPlayer(track) {
       audio.removeEventListener("pause", onPauseEv);
       audio.removeEventListener("ended", onEndedEv);
     };
-  }, [onPlaying, onPaused, onEnded]);
+  }, [onPlaying, onPaused, onEnded, hasNext, next]);
 
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;

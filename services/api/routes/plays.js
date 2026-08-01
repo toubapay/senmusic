@@ -91,6 +91,41 @@ playsRouter.patch("/v1/plays/:playId", requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * Recently played — one row per track (its most recent play), newest
+ * first. `plays` is partitioned by started_at, not user_id, so an
+ * unbounded per-user scan would touch every partition ever created;
+ * bounded to a semantically-reasonable "recent" window instead.
+ */
+playsRouter.get("/v1/plays/recent", requireAuth, async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit ?? "20", 10) || 20, 50);
+
+  const { rows } = await pool.query(
+    `WITH latest_plays AS (
+       SELECT DISTINCT ON (p.track_id) p.track_id, p.started_at
+       FROM plays p
+       WHERE p.user_id = $1 AND p.started_at > now() - interval '180 days'
+       ORDER BY p.track_id, p.started_at DESC
+     )
+     SELECT lp.started_at AS "playedAt",
+            t.id, t.title, t.duration_ms AS "durationMs", t.access, t.explicit,
+            al.title AS "albumTitle", al.cover_url AS "coverUrl",
+            COALESCE(json_agg(json_build_object('id', ar.id, 'name', ar.name))
+                     FILTER (WHERE ar.id IS NOT NULL), '[]') AS artists
+     FROM latest_plays lp
+     JOIN tracks t ON t.id = lp.track_id
+     LEFT JOIN albums al ON al.id = t.album_id
+     LEFT JOIN track_artists ta ON ta.track_id = t.id
+     LEFT JOIN artists ar ON ar.id = ta.artist_id
+     WHERE t.status != 'removed'
+     GROUP BY lp.started_at, t.id, al.title, al.cover_url
+     ORDER BY lp.started_at DESC
+     LIMIT $2`,
+    [req.user.id, limit]
+  );
+  res.json({ tracks: rows });
+});
+
 /* Companion migration:
 
 CREATE TABLE play_count_applied (

@@ -10,11 +10,11 @@ const fmt = (sec) => {
 };
 
 export default function BottomPlayer() {
-  const { track } = usePlayerContext();
+  const { currentTrack: track, hasNext, hasPrev, next, prev } = usePlayerContext();
   const {
     audioRef, paused, buffering, position, duration, premiumWall, error,
     togglePlay, seekTo,
-  } = useAudioPlayer(track);
+  } = useAudioPlayer();
 
   if (!track) return null;
 
@@ -50,9 +50,11 @@ export default function BottomPlayer() {
       )}
 
       <div className="bp-controls">
+        <button className="bp-nav-btn" onClick={prev} disabled={!hasPrev} aria-label="Précédent">⏮</button>
         <button className="bp-play-btn" onClick={togglePlay} disabled={buffering || premiumWall}>
           {buffering ? "…" : paused ? "▶" : "❚❚"}
         </button>
+        <button className="bp-nav-btn" onClick={next} disabled={!hasNext} aria-label="Suivant">⏭</button>
       </div>
     </div>
   );

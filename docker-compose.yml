@@ -13,6 +13,7 @@ services:
       - ./db/schema.sql:/docker-entrypoint-initdb.d/00-schema.sql:ro
       - ./db/migrations/001_offline_downloads.sql:/docker-entrypoint-initdb.d/01-offline_downloads.sql:ro
       - ./db/migrations/002_play_count_applied.sql:/docker-entrypoint-initdb.d/02-play_count_applied.sql:ro
+      - ./db/migrations/003_plays_partitions.sql:/docker-entrypoint-initdb.d/03-plays_partitions.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U promusic"]
       interval: 5s

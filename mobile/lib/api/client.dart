@@ -177,4 +177,94 @@ class ApiClient {
     'DELETE',
     '/v1/offline/downloads/${Uri.encodeComponent(trackId)}',
   );
+
+  // ------------------------------------------------------------
+  // Playlists
+  // ------------------------------------------------------------
+  Future<List<dynamic>> listMyPlaylists() => _request(
+    'GET',
+    '/v1/playlists/mine',
+  ).then((r) => (r as Map<String, dynamic>)['playlists'] as List<dynamic>);
+
+  Future<Map<String, dynamic>> createPlaylist(
+    String title, {
+    String? description,
+    bool isPublic = true,
+  }) => _request(
+    'POST',
+    '/v1/playlists',
+    body: {'title': title, 'description': description, 'isPublic': isPublic},
+  ).then((r) => r as Map<String, dynamic>);
+
+  Future<Map<String, dynamic>> getPlaylist(String playlistId) => _request(
+    'GET',
+    '/v1/playlists/${Uri.encodeComponent(playlistId)}',
+  ).then((r) => r as Map<String, dynamic>);
+
+  Future<Map<String, dynamic>> updatePlaylist(
+    String playlistId,
+    Map<String, dynamic> patch,
+  ) => _request(
+    'PATCH',
+    '/v1/playlists/${Uri.encodeComponent(playlistId)}',
+    body: patch,
+  ).then((r) => r as Map<String, dynamic>);
+
+  Future<void> deletePlaylist(String playlistId) =>
+      _request('DELETE', '/v1/playlists/${Uri.encodeComponent(playlistId)}');
+
+  Future<Map<String, dynamic>> addPlaylistTrack(
+    String playlistId,
+    String trackId,
+  ) => _request(
+    'POST',
+    '/v1/playlists/${Uri.encodeComponent(playlistId)}/tracks',
+    body: {'trackId': trackId},
+  ).then((r) => r as Map<String, dynamic>);
+
+  Future<void> removePlaylistTrack(
+    String playlistId,
+    String trackId,
+  ) => _request(
+    'DELETE',
+    '/v1/playlists/${Uri.encodeComponent(playlistId)}/tracks/${Uri.encodeComponent(trackId)}',
+  );
+
+  Future<Map<String, dynamic>> reorderPlaylistTrack(
+    String playlistId,
+    String trackId,
+    String? afterTrackId,
+  ) => _request(
+    'PATCH',
+    '/v1/playlists/${Uri.encodeComponent(playlistId)}/tracks/${Uri.encodeComponent(trackId)}/reorder',
+    body: {'afterTrackId': afterTrackId},
+  ).then((r) => r as Map<String, dynamic>);
+
+  // ------------------------------------------------------------
+  // Library (liked tracks)
+  // ------------------------------------------------------------
+  Future<void> likeTrack(String trackId) =>
+      _request('POST', '/v1/library/tracks/${Uri.encodeComponent(trackId)}');
+
+  Future<void> unlikeTrack(String trackId) =>
+      _request('DELETE', '/v1/library/tracks/${Uri.encodeComponent(trackId)}');
+
+  Future<Map<String, dynamic>> getLikedTracks() => _request(
+    'GET',
+    '/v1/library/tracks',
+  ).then((r) => r as Map<String, dynamic>);
+
+  Future<List<String>> getLikedTrackIds() =>
+      _request('GET', '/v1/library/tracks/ids').then(
+        (r) => ((r as Map<String, dynamic>)['trackIds'] as List<dynamic>)
+            .cast<String>(),
+      );
+
+  // ------------------------------------------------------------
+  // Recently played
+  // ------------------------------------------------------------
+  Future<Map<String, dynamic>> getRecentlyPlayed({int limit = 20}) => _request(
+    'GET',
+    '/v1/plays/recent?limit=$limit',
+  ).then((r) => r as Map<String, dynamic>);
 }

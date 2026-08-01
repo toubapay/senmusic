@@ -30,6 +30,8 @@ assembled into one working repo.
   routes/artist-uploads.js
   routes/search.js
   routes/offline.js
+  routes/playlists.js
+  routes/library.js
   lib/cdn-signer.js
   lib/paydunya.js
   lib/meili.js
@@ -86,6 +88,34 @@ assembled into one working repo.
   for the full piece-by-piece mapping. `flutter analyze` and `flutter test`
   pass; no Android SDK/iOS toolchain was available to verify an actual
   device build
+- Playlists, liked tracks, a play queue, and recently-played — the
+  `playlists`/`playlist_tracks`/`library_items` tables existed in
+  `schema.sql` from the start but were never wired to any route or
+  client. Now: `routes/playlists.js` (CRUD + add/remove/reorder track,
+  gapped-integer positions per the schema's own comment, reflowing to
+  1000/2000/... when a reorder runs out of integer gap), `routes/library.js`
+  (like/unlike, scoped to `item_type='track'` — the other polymorphic
+  types `library_items` supports are out of scope), and `GET
+  /v1/plays/recent` (added to the existing `routes/plays.js`, deduped to
+  one row per track via `DISTINCT ON`). web/player and mobile both got a
+  real ordered-queue player (`queue`/`currentIndex`/`next`/`prev` — was a
+  single `currentTrack` before) instead of only ever replacing one track;
+  `playTrack()` still works as 1-item-queue sugar so old call sites are
+  unchanged. A single unified Library view (Liked Songs pinned first,
+  playlists below) plus a "Repris récemment" section on Home — not three
+  separate destinations — following the IA in Spotify's own App Store
+  screenshots, not something invented here
+- `db/migrations/003_plays_partitions.sql` — found mid-work, unrelated to
+  the above but blocking `GET /v1/plays/recent`: `schema.sql` only ever
+  created one `plays` partition (`plays_2026_07`, up to but not including
+  2026-08-01), so every `INSERT INTO plays` had been failing since that
+  date passed. Fixed with an explicit `plays_2026_08` partition plus a
+  permanent `plays_default DEFAULT` partition as a safety net — verified
+  both a same-day insert and a future-dated one land in the right place.
+  Pre-creating each month's partition ahead of time (a scheduled job, same
+  shape as `services/royalties-job`) is recommended follow-up work, not
+  built here — see the migration file's own comment for why it still
+  matters with the default partition in place
 
 ## Conventions already established in the code — keep these
 - All money in XOF as integers (whole francs), never floats
@@ -97,6 +127,11 @@ assembled into one working repo.
 - Free tier capped at 128kbps; premium unlocks 256kbps — enforced both in
   the master playlist rewrite AND the variant-token check (defense in depth)
 - A play counts toward royalties at >=30s listened, tracked via heartbeat PATCH
+- Ownership checks reply 404 for "doesn't exist" AND "exists but not visible
+  to you" on GET (don't leak existence via a 403/404 split), but 403 for
+  "exists, not yours" on mutating routes (the caller already knows the id
+  there, so 403 tells them nothing new) — see `playlists.js`'s detail GET
+  vs its PATCH/DELETE/track routes for the pattern
 
 ## Build/test commands
 ```
@@ -108,7 +143,7 @@ curl localhost:8090/healthz        # (host port from docker-compose.yml; 8080 if
 No automated test suite yet. For manual testing, open
 `services/api/public/test-console.html` (served by the API itself at
 `/test-console.html`, same-origin so no CORS setup is needed) — it has a
-form for every route across all seven routers, plus a client-side JWT
+form for every route across all nine routers, plus a client-side JWT
 generator (paste your `JWT_SECRET` + any UUID as the user id) since there's
 no login route yet to issue real session tokens.
 

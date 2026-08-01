@@ -20,6 +20,8 @@ import { subscriptionsRouter } from "./routes/subscriptions.js";
 import { artistRouter } from "./routes/artist-uploads.js";
 import { searchRouter } from "./routes/search.js";
 import { offlineRouter } from "./routes/offline.js";
+import { playlistsRouter } from "./routes/playlists.js";
+import { libraryRouter } from "./routes/library.js";
 
 // Last-resort safety net for rejections outside the request/response cycle
 // (e.g. a background timer) — request-path errors are now handled above.
@@ -54,6 +56,8 @@ app.use(subscriptionsRouter);
 app.use(artistRouter);
 app.use(searchRouter);
 app.use(offlineRouter);
+app.use(playlistsRouter);
+app.use(libraryRouter);
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {

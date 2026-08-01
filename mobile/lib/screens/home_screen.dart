@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api/client.dart';
 import '../models/track.dart';
+import '../widgets/add_to_playlist_sheet.dart';
 import '../widgets/track_tile.dart';
 
 const _genreChips = [
@@ -26,6 +27,48 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _activeGenre;
   String? _error;
   bool _loading = false;
+
+  List<Track>? _recent;
+  Set<String> _likedIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+    ApiClient.instance
+        .getRecentlyPlayed(limit: 10)
+        .then((r) {
+          setState(
+            () => _recent = (r['tracks'] as List<dynamic>)
+                .map((t) => Track.fromDetail(t as Map<String, dynamic>))
+                .toList(),
+          );
+        })
+        .catchError((_) {
+          setState(() => _recent = []);
+        });
+    ApiClient.instance
+        .getLikedTrackIds()
+        .then((ids) => setState(() => _likedIds = ids.toSet()))
+        .catchError((_) {});
+  }
+
+  Future<void> _toggleLike(Track track) async {
+    final liked = _likedIds.contains(track.id);
+    setState(
+      () => liked ? _likedIds.remove(track.id) : _likedIds.add(track.id),
+    );
+    try {
+      if (liked) {
+        await ApiClient.instance.unlikeTrack(track.id);
+      } else {
+        await ApiClient.instance.likeTrack(track.id);
+      }
+    } catch (_) {
+      setState(
+        () => liked ? _likedIds.add(track.id) : _likedIds.remove(track.id),
+      );
+    }
+  }
 
   Future<void> _runSearch(String q) async {
     if (q.trim().length < 2) return;
@@ -75,12 +118,37 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+  Widget _trackTile(Track t, List<Track> queue, String source) => TrackTile(
+    track: t,
+    queueTracks: queue,
+    queueSource: source,
+    isLiked: _likedIds.contains(t.id),
+    onToggleLike: () => _toggleLike(t),
+    onAddToPlaylist: () => showAddToPlaylistSheet(context, t),
+  );
+
   @override
   Widget build(BuildContext context) {
     final results = _searchResults ?? _genreResults;
 
     return CustomScrollView(
       slivers: [
+        if (_recent != null && _recent!.isNotEmpty) ...[
+          const SliverPadding(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+            sliver: SliverToBoxAdapter(
+              child: Text(
+                'Repris récemment',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+          SliverList.builder(
+            itemCount: _recent!.length,
+            itemBuilder: (context, i) =>
+                _trackTile(_recent![i], _recent!, 'recently_played'),
+          ),
+        ],
         SliverPadding(
           padding: const EdgeInsets.all(16),
           sliver: SliverToBoxAdapter(
@@ -150,7 +218,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 )
               : SliverList.builder(
                   itemCount: results.length,
-                  itemBuilder: (context, i) => TrackTile(track: results[i]),
+                  itemBuilder: (context, i) => _trackTile(
+                    results[i],
+                    results,
+                    _searchResults != null ? 'search' : 'genre',
+                  ),
                 ),
       ],
     );

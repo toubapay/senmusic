@@ -1,9 +1,9 @@
 # ProMusic mobile (Flutter)
 
-Listener app: search, HLS playback, subscriptions, offline downloads.
-Android + iOS only (the `linux`/`macos`/`windows`/`web` targets `flutter
-create` scaffolds by default were removed — `web/player` is already the
-web client).
+Listener app: search, HLS playback, subscriptions, offline downloads,
+playlists, liked tracks, a play queue, recently-played. Android + iOS only
+(the `linux`/`macos`/`windows`/`web` targets `flutter create` scaffolds by
+default were removed — `web/player` is already the web client).
 
 ## Run
 
@@ -34,12 +34,30 @@ This used to be a handful of loose React Native pieces
 | `lib/screens/player_screen.dart` | `src/screens/PlayerScreen.jsx` | `just_audio` (ExoPlayer/AVPlayer, same engines `react-native-video` used) replaces the RN video component; same paywall-on-403 behavior |
 | `lib/services/offline_manager.dart` | `src/offline/offlineManager.js` | same AES-256-CTR-encrypted-file contract, same license lifecycle (`refreshLicenses`/`purgeAllKeys`) |
 
+## Playlists, liked tracks, queue, recently played
+
+Added later, same shared design as `web/player` (see root `CLAUDE.md`'s
+"Known gaps" for the full story): `state/player_state.dart` holds an
+ordered `queue`/`currentIndex` instead of a single track now, with
+`playTrack()` kept as sugar for a 1-item queue so nothing else changed
+behavior. One "Bibliothèque" tab (`screens/library_screen.dart`) — Liked
+Songs pinned first, playlists below — replaces what would otherwise be
+three separate nav destinations; recently-played is a section at the top
+of `screens/home_screen.dart` instead of its own screen. Reorder is
+up/down buttons, not drag-and-drop, deliberately — no device/emulator here
+to verify a drag gesture, and it keeps both platforms' interaction model
+symmetric.
+
 ## Verified, and what wasn't
 
-`flutter analyze` (0 issues) and `flutter test` (the app actually boots to
-the home tab with providers wired up) both pass. There's no Android SDK or
-iOS toolchain in the sandbox this was built in, so an actual device/emulator
-run and a release build were **not** verified — do that before shipping.
+`flutter analyze` (0 issues) and `flutter test` (7 tests: the app boots to
+the home tab with providers wired up, the 5-tab bottom nav renders
+including Bibliothèque, tapping it navigates to the Library screen, and 4
+tests on `PlayerState`'s queue index math — `playQueue`/`next`/`prev`
+transitions, including the no-op-at-the-ends cases) both pass. There's no
+Android SDK or iOS toolchain in the sandbox this was built in, so an actual
+device/emulator run and a release build were **not** verified — do that
+before shipping.
 
 ## Known gaps, same pattern as the rest of this repo
 

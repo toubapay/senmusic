@@ -65,3 +65,43 @@ export const getSubscription = () => request("GET", "/v1/subscriptions/me");
 
 export const checkout = (planCode) =>
   request("POST", "/v1/subscriptions/checkout", { planCode });
+
+// ------------------------------------------------------------
+// Playlists
+// ------------------------------------------------------------
+export const listMyPlaylists = () => request("GET", "/v1/playlists/mine");
+
+export const createPlaylist = (title, description, isPublic) =>
+  request("POST", "/v1/playlists", { title, description, isPublic });
+
+export const getPlaylist = (playlistId) => request("GET", `/v1/playlists/${playlistId}`);
+
+export const updatePlaylist = (playlistId, patch) =>
+  request("PATCH", `/v1/playlists/${playlistId}`, patch);
+
+export const deletePlaylist = (playlistId) => request("DELETE", `/v1/playlists/${playlistId}`);
+
+export const addPlaylistTrack = (playlistId, trackId) =>
+  request("POST", `/v1/playlists/${playlistId}/tracks`, { trackId });
+
+export const removePlaylistTrack = (playlistId, trackId) =>
+  request("DELETE", `/v1/playlists/${playlistId}/tracks/${trackId}`);
+
+export const reorderPlaylistTrack = (playlistId, trackId, afterTrackId) =>
+  request("PATCH", `/v1/playlists/${playlistId}/tracks/${trackId}/reorder`, { afterTrackId });
+
+// ------------------------------------------------------------
+// Library (liked tracks)
+// ------------------------------------------------------------
+export const likeTrack = (trackId) => request("POST", `/v1/library/tracks/${trackId}`);
+
+export const unlikeTrack = (trackId) => request("DELETE", `/v1/library/tracks/${trackId}`);
+
+export const getLikedTracks = () => request("GET", "/v1/library/tracks");
+
+export const getLikedTrackIds = () => request("GET", "/v1/library/tracks/ids");
+
+// ------------------------------------------------------------
+// Recently played
+// ------------------------------------------------------------
+export const getRecentlyPlayed = (limit = 20) => request("GET", `/v1/plays/recent?limit=${limit}`);
