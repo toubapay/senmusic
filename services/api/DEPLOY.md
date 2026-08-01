@@ -34,6 +34,7 @@ cloud-sql-proxy "$INSTANCE_CONNECTION_NAME" &
 PGPASSWORD=$DB_PASSWORD psql -h 127.0.0.1 -U promusic -d promusic -f ../../db/schema.sql
 PGPASSWORD=$DB_PASSWORD psql -h 127.0.0.1 -U promusic -d promusic -f ../../db/migrations/001_offline_downloads.sql
 PGPASSWORD=$DB_PASSWORD psql -h 127.0.0.1 -U promusic -d promusic -f ../../db/migrations/002_play_count_applied.sql
+PGPASSWORD=$DB_PASSWORD psql -h 127.0.0.1 -U promusic -d promusic -f ../../db/migrations/003_plays_partitions.sql
 ```
 
 ## 2. Buckets + Cloud CDN
@@ -115,7 +116,7 @@ gcloud run deploy promusic-api \
   --service-account promusic-api@$PROJECT_ID.iam.gserviceaccount.com \
   --add-cloudsql-instances "$INSTANCE_CONNECTION_NAME" \
   --allow-unauthenticated \
-  --set-env-vars ORIGINALS_BUCKET=promusic-originals,HLS_BUCKET=promusic-hls,API_BASE_URL=https://api.yourdomain.sn,APP_BASE_URL=https://app.yourdomain.sn,ARTIST_DASHBOARD_URL=https://dashboard.yourdomain.sn,CDN_BASE_URL=https://cdn.yourdomain.sn,CDN_KEY_NAME=stream-key-1,MEILI_HOST=$MEILI_HOST,PAYDUNYA_MODE=live \
+  --set-env-vars ORIGINALS_BUCKET=promusic-originals-$PROJECT_ID,HLS_BUCKET=promusic-hls-$PROJECT_ID,API_BASE_URL=https://api.yourdomain.sn,APP_BASE_URL=https://app.yourdomain.sn,ARTIST_DASHBOARD_URL=https://dashboard.yourdomain.sn,CDN_BASE_URL=https://cdn.yourdomain.sn,CDN_KEY_NAME=stream-key-1,MEILI_HOST=$MEILI_HOST,PAYDUNYA_MODE=live \
   --set-secrets DATABASE_URL=database-url:latest,JWT_SECRET=jwt-secret:latest,STREAM_TOKEN_SECRET=stream-token-secret:latest,CDN_KEY_B64=cdn-key-b64:latest,PAYDUNYA_MASTER_KEY=paydunya-master-key:latest,PAYDUNYA_PRIVATE_KEY=paydunya-private-key:latest,PAYDUNYA_TOKEN=paydunya-token:latest
 ```
 

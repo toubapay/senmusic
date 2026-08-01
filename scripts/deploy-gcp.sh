@@ -74,6 +74,7 @@ sleep 5
 PGPASSWORD="$DB_PASSWORD" psql -h 127.0.0.1 -U promusic -d promusic -v ON_ERROR_STOP=0 -f db/schema.sql
 PGPASSWORD="$DB_PASSWORD" psql -h 127.0.0.1 -U promusic -d promusic -v ON_ERROR_STOP=0 -f db/migrations/001_offline_downloads.sql
 PGPASSWORD="$DB_PASSWORD" psql -h 127.0.0.1 -U promusic -d promusic -v ON_ERROR_STOP=0 -f db/migrations/002_play_count_applied.sql
+PGPASSWORD="$DB_PASSWORD" psql -h 127.0.0.1 -U promusic -d promusic -v ON_ERROR_STOP=0 -f db/migrations/003_plays_partitions.sql
 kill "$PROXY_PID" 2>/dev/null || true
 trap - EXIT
 
@@ -174,6 +175,10 @@ gcloud run deploy promusic-api \
 API_URL="$(gcloud run services describe promusic-api --region "$REGION" --format='value(status.url)')"
 echo "==> API deployed: $API_URL"
 curl -sf "$API_URL/healthz" && echo " <- healthz OK" || echo "!! healthz check failed"
+
+echo "==> Setting API_BASE_URL on promusic-api to its own URL (streaming.js master-playlist rewrite + paydunya.js webhook callback both need it)"
+gcloud run services update promusic-api --region "$REGION" \
+  --update-env-vars "API_BASE_URL=$API_URL" >/dev/null
 
 # ------------------------------------------------------------
 # Royalties job
