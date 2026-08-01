@@ -7,7 +7,8 @@ royalties. Built incrementally (see `/docs/pieces/`) and now being
 assembled into one working repo.
 
 ## Stack
-- **Mobile**: React Native (client, player, offline manager)
+- **Mobile**: Flutter (client, player, offline manager) — replaced React
+  Native; see "Known gaps" below for why
 - **Web**: React (artist dashboard)
 - **API**: Node.js / Express on Cloud Run
 - **DB**: PostgreSQL (Cloud SQL)
@@ -23,6 +24,7 @@ assembled into one working repo.
 /db/migrations/              # offline-migration.sql etc, numbered in order
 /services/api/               # main Express API — merge these routers:
   routes/streaming.js
+  routes/tracks.js
   routes/plays.js
   routes/subscriptions.js
   routes/artist-uploads.js
@@ -35,11 +37,11 @@ assembled into one working repo.
   lib/auth.js                 # requireAuth JWT middleware, needed by all routes
 /services/transcoder/        # from hls-transcoder/ as-is (separate Cloud Run service)
 /services/royalties-job/     # from phase3/royalties/compute-royalties.js (Cloud Run job)
-/mobile/                     # React Native app
-  src/api/client.js
-  src/hooks/usePlayTracking.js
-  src/screens/PlayerScreen.jsx
-  src/offline/offlineManager.js
+/mobile/                     # Flutter app (Android + iOS)
+  lib/api/client.dart
+  lib/services/play_tracking.dart
+  lib/services/offline_manager.dart
+  lib/screens/player_screen.dart
 /web/dashboard/               # React artist dashboard (Vite SPA)
   src/components/UploadForm.jsx
   src/pages/Tracks.jsx
@@ -77,6 +79,13 @@ assembled into one working repo.
   real Vite SPA (upload flow, a track-status table, the same token-paste
   Settings page as web/player) and its `DEPLOY.md` has real steps instead
   of a "not buildable yet" note
+- `mobile/` — was loose React Native pieces with no app shell (same
+  situation web/dashboard was in); replaced with Flutter/Dart on request,
+  1:1 behavior port (same API contract, same 10s/30s play-tracking
+  thresholds, same AES-256-CTR offline-file contract) — see `mobile/README.md`
+  for the full piece-by-piece mapping. `flutter analyze` and `flutter test`
+  pass; no Android SDK/iOS toolchain was available to verify an actual
+  device build
 
 ## Conventions already established in the code — keep these
 - All money in XOF as integers (whole francs), never floats
@@ -99,7 +108,7 @@ curl localhost:8090/healthz        # (host port from docker-compose.yml; 8080 if
 No automated test suite yet. For manual testing, open
 `services/api/public/test-console.html` (served by the API itself at
 `/test-console.html`, same-origin so no CORS setup is needed) — it has a
-form for every route across all six routers, plus a client-side JWT
+form for every route across all seven routers, plus a client-side JWT
 generator (paste your `JWT_SECRET` + any UUID as the user id) since there's
 no login route yet to issue real session tokens.
 
@@ -115,6 +124,17 @@ needs `hls.js` (native browser HLS can't send the Authorization header the
 master-playlist route requires) and, for real audio, a live GCS + Cloud CDN
 backend — without one, streaming/search/checkout calls correctly reach the
 API and fail there (verified end-to-end via CORS + a real JWT), not before.
+
+For the mobile app (Flutter, Android + iOS):
+```
+cd mobile && flutter pub get
+flutter run --dart-define=API_BASE_URL=http://localhost:8080
+```
+Same no-login-yet situation — paste a token on the Session tab (stored via
+`flutter_secure_storage`, not `localStorage`, but same idea). See
+`mobile/README.md` for what was verified (`flutter analyze` + `flutter test`)
+and what wasn't (no device/emulator run — no Android SDK/iOS toolchain in
+the environment this was built in).
 
 ## What NOT to change without asking
 - The royalty pool formula in `compute-royalties.js` (pro-rata model, already reasoned through)
