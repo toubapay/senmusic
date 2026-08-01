@@ -22,6 +22,7 @@ import { searchRouter } from "./routes/search.js";
 import { offlineRouter } from "./routes/offline.js";
 import { playlistsRouter } from "./routes/playlists.js";
 import { libraryRouter } from "./routes/library.js";
+import { internalRouter } from "./routes/internal.js";
 
 // Last-resort safety net for rejections outside the request/response cycle
 // (e.g. a background timer) — request-path errors are now handled above.
@@ -49,6 +50,20 @@ app.get("/healthz", (req, res) => res.json({ ok: true }));
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 app.use(express.static(path.join(__dirname, "public")));
 
+// web/player and web/dashboard's built SPAs, consolidated into this one
+// Cloud Run service (see root Dockerfile) rather than deployed as separate
+// services — populated at image build time only; absent in local dev,
+// where both apps run via their own `npm run dev` instead (see CLAUDE.md).
+// Each is a client-side-routed SPA, so unmatched GETs under its prefix
+// fall back to that build's own index.html instead of 404ing.
+for (const [urlPrefix, dir] of [["/app", "public/app"], ["/dashboard", "public/dashboard"]]) {
+  const buildDir = path.join(__dirname, dir);
+  app.use(urlPrefix, express.static(buildDir));
+  app.get(`${urlPrefix}/*`, (req, res, next) =>
+    res.sendFile(path.join(buildDir, "index.html"), (err) => err && next())
+  );
+}
+
 app.use(streamingRouter);
 app.use(tracksRouter);
 app.use(playsRouter);
@@ -58,6 +73,7 @@ app.use(searchRouter);
 app.use(offlineRouter);
 app.use(playlistsRouter);
 app.use(libraryRouter);
+app.use(internalRouter);
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {

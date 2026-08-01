@@ -1,12 +1,5 @@
 /**
- * DEPRECATED — no longer deployed. Superseded by
- * services/api/lib/compute-royalties.js (same formula, unchanged), called
- * via POST /internal/royalties/run (services/api/routes/internal.js) as
- * part of the single-Cloud-Run-service consolidation. Kept here for
- * reference only; not built or referenced by any Dockerfile or deploy
- * script anymore.
- *
- * compute-royalties.js — monthly Cloud Run JOB (not a server).
+ * compute-royalties.js — royalty computation, callable from the API.
  * ------------------------------------------------------------
  * Model: pro-rata revenue pool, like the major platforms.
  *
@@ -19,25 +12,16 @@
  * on royalty_statements means re-running a month is a no-op (ON CONFLICT
  * DO NOTHING), so a crashed or double-triggered run can't double-pay.
  *
- * Run for the PREVIOUS calendar month by default, or pass an explicit
- * period:  node compute-royalties.js 2026-06
- *
- * Deploy:
- *   gcloud run jobs create compute-royalties \
- *     --source . --region europe-west1 \
- *     --set-secrets DATABASE_URL=music-db-url:latest \
- *     --set-env-vars ARTIST_SHARE=0.60
- *
- *   gcloud scheduler jobs create http royalties-monthly \
- *     --schedule "0 4 2 * *" --time-zone "Africa/Dakar" \
- *     --uri "https://run.googleapis.com/v2/projects/$PROJECT_ID/locations/europe-west1/jobs/compute-royalties:run" \
- *     --oauth-service-account-email scheduler@$PROJECT_ID.iam.gserviceaccount.com
- *   (runs at 04:00 on the 2nd of each month, for the month just ended)
+ * Formerly a standalone Cloud Run job (services/royalties-job); now
+ * consolidated into the API process and invoked via POST
+ * /internal/royalties/run (see routes/internal.js), on Cloud Scheduler's
+ * monthly schedule — the formula/logic below is unchanged, only the
+ * entry point moved. Uses the API's shared pg pool (lib/db.js) rather
+ * than opening its own, since it now runs inside the same process.
  */
 
-import pg from "pg";
+import { pool } from "./db.js";
 
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
 const ARTIST_SHARE = parseFloat(process.env.ARTIST_SHARE ?? "0.60");
 
 function resolvePeriod(arg) {
@@ -51,8 +35,13 @@ function resolvePeriod(arg) {
   return { start, end };
 }
 
-async function main() {
-  const { start, end } = resolvePeriod(process.argv[2]);
+/**
+ * Runs the royalty computation for a period ("YYYY-MM", or the previous
+ * calendar month if omitted). Returns a summary; never throws on "nothing
+ * to distribute" (returns distributed: 0 instead).
+ */
+export async function computeRoyalties(periodArg) {
+  const { start, end } = resolvePeriod(periodArg);
   const periodStart = start.toISOString().slice(0, 10);
   const periodEnd = new Date(end.getTime() - 86400000).toISOString().slice(0, 10); // inclusive last day
   console.log(`Computing royalties for ${periodStart} → ${periodEnd} (artist share ${ARTIST_SHARE * 100}%)`);
@@ -86,7 +75,7 @@ async function main() {
     if (totalPlays === 0 || poolXof === 0) {
       console.log(`Nothing to distribute (pool=${poolXof} XOF, plays=${totalPlays})`);
       await client.query("ROLLBACK");
-      return;
+      return { periodStart, periodEnd, poolXof, totalPlays, statementsCreated: 0, distributedXof: 0 };
     }
     console.log(`Pool: ${poolXof} XOF across ${totalPlays} counted plays ` +
                 `(≈ ${(poolXof / totalPlays).toFixed(4)} XOF/play)`);
@@ -124,22 +113,17 @@ async function main() {
 
     await client.query("COMMIT");
 
-    const distributed = inserted.reduce((s, r) => s + r.amount_xof, 0);
-    console.log(`Created ${inserted.length} statements, ${distributed} XOF distributed ` +
-                `(${poolXof - distributed} XOF rounding remainder stays in the pool)`);
+    const distributedXof = inserted.reduce((s, r) => s + r.amount_xof, 0);
+    console.log(`Created ${inserted.length} statements, ${distributedXof} XOF distributed ` +
+                `(${poolXof - distributedXof} XOF rounding remainder stays in the pool)`);
     if (inserted.length === 0) {
       console.log("0 new statements — period was likely already computed (idempotent skip)");
     }
+    return { periodStart, periodEnd, poolXof, totalPlays, statementsCreated: inserted.length, distributedXof };
   } catch (e) {
     await client.query("ROLLBACK");
     throw e;
   } finally {
     client.release();
-    await pool.end();
   }
 }
-
-main().catch((e) => {
-  console.error("Royalty run failed:", e);
-  process.exit(1); // non-zero → Cloud Run job marked failed → alerting
-});

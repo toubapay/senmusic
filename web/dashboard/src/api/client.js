@@ -5,7 +5,11 @@
  * pasted in one app works in the other.
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://api.yourdomain.sn";
+// Unset (production consolidated build) means same-origin relative
+// requests — correct once this app is served from the API's own Cloud Run
+// service (see root Dockerfile). Local dev sets this explicitly via
+// .env.local since the Vite dev server and API run on different ports.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 export const getToken = () => localStorage.getItem("token") ?? "";
 export const setToken = (t) => localStorage.setItem("token", t);

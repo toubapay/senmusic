@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # End-to-end GCP deployment: Cloud SQL, buckets, secrets, IAM, transcoder,
-# API, royalties job, and both web apps — on default *.run.app URLs (no
-# custom domain). Run from the repo root, in an environment with gcloud +
-# docker already available and authenticated (e.g. Cloud Shell).
+# and one consolidated Cloud Run service (API + web/player + web/dashboard,
+# built from the repo-root Dockerfile; royalties run via a Cloud Scheduler
+# call into the API rather than a separate job) — on default *.run.app
+# URLs (no custom domain). Run from the repo root, in an environment with
+# gcloud + docker already available and authenticated (e.g. Cloud Shell).
 #
 # Skips, deliberately, because they need real values this script can't
 # generate: PayDunya keys, the Cloud CDN signing key, and Meilisearch
@@ -104,6 +106,10 @@ put_secret() {
 put_secret jwt-secret "$(openssl rand -base64 48)"
 put_secret stream-token-secret "$(openssl rand -base64 48)"
 put_secret database-url "postgres://promusic:$DB_PASSWORD@/promusic?host=/cloudsql/$INSTANCE_CONNECTION_NAME"
+# Guards POST /internal/royalties/run (routes/internal.js) — Cloud
+# Scheduler sends this back as a header instead of using Cloud Run IAM/OIDC,
+# since the API service itself is --allow-unauthenticated.
+put_secret internal-secret "$(openssl rand -base64 32)"
 
 # ------------------------------------------------------------
 # Service account + IAM
@@ -160,81 +166,54 @@ gcloud eventarc triggers describe on-track-upload --location="$REGION" >/dev/nul
     --service-account="eventarc-trigger@$PROJECT_ID.iam.gserviceaccount.com"
 
 # ------------------------------------------------------------
-# API
+# API + web/player + web/dashboard — one consolidated Cloud Run service,
+# built from the repo-root Dockerfile (multi-stage: builds both SPAs,
+# copies their dist/ into the API image, served at /app and /dashboard).
 # ------------------------------------------------------------
-echo "==> Deploying API"
+echo "==> Deploying API (+ both web SPAs, from the repo-root Dockerfile)"
 gcloud run deploy promusic-api \
-  --source services/api \
+  --source . \
   --region "$REGION" \
   --service-account "$SA_EMAIL" \
   --add-cloudsql-instances "$INSTANCE_CONNECTION_NAME" \
   --allow-unauthenticated \
   --set-env-vars "ORIGINALS_BUCKET=$ORIGINALS_BUCKET,HLS_BUCKET=$HLS_BUCKET" \
-  --set-secrets DATABASE_URL=database-url:latest,JWT_SECRET=jwt-secret:latest,STREAM_TOKEN_SECRET=stream-token-secret:latest
+  --set-secrets DATABASE_URL=database-url:latest,JWT_SECRET=jwt-secret:latest,STREAM_TOKEN_SECRET=stream-token-secret:latest,INTERNAL_SECRET=internal-secret:latest
 
 API_URL="$(gcloud run services describe promusic-api --region "$REGION" --format='value(status.url)')"
-echo "==> API deployed: $API_URL"
+echo "==> API deployed: $API_URL (web/player at /app, web/dashboard at /dashboard)"
 curl -sf "$API_URL/healthz" && echo " <- healthz OK" || echo "!! healthz check failed"
 
-echo "==> Setting API_BASE_URL on promusic-api to its own URL (streaming.js master-playlist rewrite + paydunya.js webhook callback both need it)"
+echo "==> Pointing API_BASE_URL/APP_BASE_URL/ARTIST_DASHBOARD_URL at the service's own URL"
+echo "    (streaming.js + paydunya.js need API_BASE_URL; APP_BASE_URL/ARTIST_DASHBOARD_URL"
+echo "    are the same origin now too, since /app and /dashboard are this same service)"
 gcloud run services update promusic-api --region "$REGION" \
-  --update-env-vars "API_BASE_URL=$API_URL" >/dev/null
+  --update-env-vars "API_BASE_URL=$API_URL,APP_BASE_URL=$API_URL,ARTIST_DASHBOARD_URL=$API_URL" >/dev/null
 
 # ------------------------------------------------------------
-# Royalties job
+# Royalties — monthly Cloud Scheduler HTTP call into the API's internal
+# route (services/api/routes/internal.js), instead of a separate Cloud Run
+# job. The API is --allow-unauthenticated, so this endpoint is guarded at
+# the app level (X-Internal-Secret header) rather than via Cloud Run
+# IAM/OIDC — no separate scheduler service account needed.
 # ------------------------------------------------------------
-echo "==> Royalties Cloud Run job + monthly scheduler"
-if gcloud run jobs describe promusic-royalties --region "$REGION" >/dev/null 2>&1; then
-  gcloud run jobs update promusic-royalties \
-    --source services/royalties-job --region "$REGION" \
-    --set-env-vars ARTIST_SHARE=0.60 --set-secrets DATABASE_URL=database-url:latest
-else
-  gcloud run jobs create promusic-royalties \
-    --source services/royalties-job --region "$REGION" \
-    --set-env-vars ARTIST_SHARE=0.60 --set-secrets DATABASE_URL=database-url:latest
-fi
-
-gcloud iam service-accounts describe "scheduler@$PROJECT_ID.iam.gserviceaccount.com" >/dev/null 2>&1 || \
-  gcloud iam service-accounts create scheduler --display-name="Cloud Scheduler runner"
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-  --member="serviceAccount:scheduler@$PROJECT_ID.iam.gserviceaccount.com" \
-  --role="roles/run.invoker" --condition=None >/dev/null
-
+echo "==> Royalties: monthly Cloud Scheduler job calling POST /internal/royalties/run"
+INTERNAL_SECRET_VALUE="$(gcloud secrets versions access latest --secret=internal-secret)"
 gcloud scheduler jobs describe royalties-monthly --location="$REGION" >/dev/null 2>&1 || \
   gcloud scheduler jobs create http royalties-monthly \
     --location="$REGION" \
     --schedule "0 4 2 * *" --time-zone "Africa/Dakar" \
-    --uri "https://run.googleapis.com/v2/projects/$PROJECT_ID/locations/$REGION/jobs/promusic-royalties:run" \
-    --oauth-service-account-email "scheduler@$PROJECT_ID.iam.gserviceaccount.com" \
-    --http-method POST
-
-# ------------------------------------------------------------
-# Web apps — built with VITE_API_BASE_URL baked in (Vite is build-time only)
-# ------------------------------------------------------------
-echo "==> Building + deploying web/player"
-PLAYER_IMAGE="$REGION-docker.pkg.dev/$PROJECT_ID/promusic/player"
-docker build --build-arg VITE_API_BASE_URL="$API_URL" -t "$PLAYER_IMAGE" web/player
-docker push "$PLAYER_IMAGE"
-gcloud run deploy promusic-player --image "$PLAYER_IMAGE" --region "$REGION" --allow-unauthenticated
-PLAYER_URL="$(gcloud run services describe promusic-player --region "$REGION" --format='value(status.url)')"
-
-echo "==> Building + deploying web/dashboard"
-DASHBOARD_IMAGE="$REGION-docker.pkg.dev/$PROJECT_ID/promusic/dashboard"
-docker build --build-arg VITE_API_BASE_URL="$API_URL" -t "$DASHBOARD_IMAGE" web/dashboard
-docker push "$DASHBOARD_IMAGE"
-gcloud run deploy promusic-dashboard --image "$DASHBOARD_IMAGE" --region "$REGION" --allow-unauthenticated
-DASHBOARD_URL="$(gcloud run services describe promusic-dashboard --region "$REGION" --format='value(status.url)')"
-
-echo "==> Wiring CORS: API now allows both web app origins"
-gcloud run services update promusic-api --region "$REGION" \
-  --update-env-vars "APP_BASE_URL=$PLAYER_URL,ARTIST_DASHBOARD_URL=$DASHBOARD_URL" >/dev/null
+    --uri "$API_URL/internal/royalties/run" \
+    --http-method POST \
+    --headers "X-Internal-Secret=$INTERNAL_SECRET_VALUE,Content-Type=application/json" \
+    --message-body "{}"
 
 cat <<SUMMARY
 
 ==================================================
-API:        $API_URL
-Player:     $PLAYER_URL
-Dashboard:  $DASHBOARD_URL
+API:            $API_URL
+web/player:     $API_URL/app
+web/dashboard:  $API_URL/dashboard
 DB password: saved in .db-password.txt (gitignored) — keep it somewhere safe
 
 Still needed before these work fully (see services/api/DEPLOY.md):

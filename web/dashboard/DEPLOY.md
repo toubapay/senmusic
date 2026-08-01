@@ -1,7 +1,12 @@
 # Deploying web/dashboard
 
-Same shape as `web/player/DEPLOY.md` — see that doc for the full
-command-by-command walkthrough of both hosting paths. The differences:
+**This is now optional.** The default deploy path (`scripts/deploy-gcp.sh`,
+or `services/api/DEPLOY.md` §6) builds this app into the API's own Cloud
+Run image, served at `/dashboard` — no separate service, bucket, or LB
+needed for it. Use this doc only if you want web/dashboard as its own
+standalone deployment instead. Same shape as `web/player/DEPLOY.md` — see
+that doc for the full command-by-command walkthrough of both standalone
+hosting paths. The differences:
 
 ## No domain yet: Cloud Run
 

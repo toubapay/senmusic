@@ -38,8 +38,10 @@ export async function createInvoice({ amountXof, description, paymentId, userId,
       custom_data: { payment_id: paymentId, user_id: userId, plan_code: planCode },
       actions: {
         callback_url: `${process.env.API_BASE_URL}/v1/webhooks/paydunya`,
-        return_url: `${process.env.APP_BASE_URL}/subscribe/success`,
-        cancel_url: `${process.env.APP_BASE_URL}/subscribe/cancelled`,
+        // /app prefix: web/player is served at that path on the
+        // consolidated Cloud Run service, not APP_BASE_URL's root.
+        return_url: `${process.env.APP_BASE_URL}/app/subscribe/success`,
+        cancel_url: `${process.env.APP_BASE_URL}/app/subscribe/cancelled`,
       },
     }),
   });

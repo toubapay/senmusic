@@ -2,3 +2,8 @@ node_modules/
 .env
 *.log
 .db-password.txt
+dist/
+# web/player + web/dashboard builds, copied in by the root Dockerfile only —
+# never committed (see CLAUDE.md's "one Cloud Run service" note)
+services/api/public/app/
+services/api/public/dashboard/

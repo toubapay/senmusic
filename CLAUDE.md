@@ -10,7 +10,10 @@ assembled into one working repo.
 - **Mobile**: Flutter (client, player, offline manager) — replaced React
   Native; see "Known gaps" below for why
 - **Web**: React (artist dashboard)
-- **API**: Node.js / Express on Cloud Run
+- **API**: Node.js / Express on Cloud Run — in production also serves
+  web/player (`/app`) and web/dashboard (`/dashboard`) as static builds,
+  consolidated into this one Cloud Run service (see DEPLOY.md); local dev
+  still runs each independently
 - **DB**: PostgreSQL (Cloud SQL)
 - **Storage/CDN**: Google Cloud Storage + Cloud CDN (signed URLs)
 - **Transcoding**: FFmpeg in a separate Cloud Run service, triggered by Eventarc
@@ -38,7 +41,8 @@ assembled into one working repo.
   lib/db.js                  # pg.Pool wrapper, needed by all routes
   lib/auth.js                 # requireAuth JWT middleware, needed by all routes
 /services/transcoder/        # from hls-transcoder/ as-is (separate Cloud Run service)
-/services/royalties-job/     # from phase3/royalties/compute-royalties.js (Cloud Run job)
+/services/royalties-job/     # DEPRECATED, kept for reference only — superseded by
+                              # services/api/lib/compute-royalties.js (see Known gaps)
 /mobile/                     # Flutter app (Android + iOS)
   lib/api/client.dart
   lib/services/play_tracking.dart
@@ -113,9 +117,42 @@ assembled into one working repo.
   permanent `plays_default DEFAULT` partition as a safety net — verified
   both a same-day insert and a future-dated one land in the right place.
   Pre-creating each month's partition ahead of time (a scheduled job, same
-  shape as `services/royalties-job`) is recommended follow-up work, not
+  shape as the royalty run below) is recommended follow-up work, not
   built here — see the migration file's own comment for why it still
   matters with the default partition in place
+- **One Postgres + one Cloud Run service** (asked for directly): Postgres
+  was already a single Cloud SQL instance. On the Cloud Run side, folded
+  web/player, web/dashboard, and the royalties job into the API's one
+  service — the transcoder and Meilisearch stay separate, deliberately (see
+  below for why). The repo-root `Dockerfile` (new — `services/api/Dockerfile`
+  still exists, unchanged, for local `docker compose`) multi-stage-builds
+  both SPAs and copies their `dist/` into the API image; `index.js` serves
+  them at `/app` and `/dashboard` with an SPA fallback. `web/player`'s and
+  `web/dashboard`'s `api/client.js` now default to a same-origin relative
+  `API_BASE_URL` (`""`) when `VITE_API_BASE_URL` is unset, which is exactly
+  the unset case for this consolidated build; local dev still sets it
+  explicitly via `.env.local` since the Vite dev server and API run on
+  different ports there. `lib/paydunya.js`'s return/cancel URLs got an
+  `/app` prefix to match. The royalty computation moved to
+  `services/api/lib/compute-royalties.js` (**formula unchanged** — see
+  "what not to change" below) and is now called via `POST
+  /internal/royalties/run` (`routes/internal.js`, guarded by an
+  `X-Internal-Secret` header since Cloud Run's `--allow-unauthenticated`
+  applies to the whole service, not per-route) instead of a separate Cloud
+  Run Job; `services/royalties-job/` is kept only as a deprecated reference
+  (deletion was blocked by a permission classifier mid-session — harmless
+  to leave, clearly marked, not referenced by anything that still runs).
+  The transcoder wasn't folded in because its resource profile
+  (`--concurrency 1`, 2Gi/2 CPU, 900s timeout — FFmpeg saturates a CPU for
+  minutes per track) would apply to the *entire* service if merged, forcing
+  every ordinary API request through the same one-request-per-instance
+  ceiling. Meilisearch wasn't folded in because it needs a persistent index
+  on disk that survives restarts, which doesn't fit Cloud Run's
+  ephemeral/scale-to-zero model. See root `DEPLOY.md`'s "One Cloud Run
+  service" section and `services/api/DEPLOY.md` §6 for the deploy
+  mechanics; `web/player/DEPLOY.md` / `web/dashboard/DEPLOY.md` still work
+  as standalone alternatives if you want to scale either independently
+  later
 
 ## Conventions already established in the code — keep these
 - All money in XOF as integers (whole francs), never floats
@@ -172,5 +209,5 @@ and what wasn't (no device/emulator run — no Android SDK/iOS toolchain in
 the environment this was built in).
 
 ## What NOT to change without asking
-- The royalty pool formula in `compute-royalties.js` (pro-rata model, already reasoned through)
+- The royalty pool formula in `services/api/lib/compute-royalties.js` (pro-rata model, already reasoned through — moved here from `services/royalties-job/`, logic unchanged)
 - The signed-URL / entitlement flow in `streaming.js` + `cdn-signer.js` (security-sensitive)

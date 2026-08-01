@@ -1,6 +1,12 @@
 # Deploying web/player
 
-A static Vite build — no server needed. Two ways to host it:
+**This is now optional.** The default deploy path (`scripts/deploy-gcp.sh`,
+or `services/api/DEPLOY.md` §6) builds this app into the API's own Cloud
+Run image, served at `/app` — no separate service, bucket, or LB needed for
+it. Use this doc only if you want web/player as its own standalone
+deployment instead (e.g. to scale or redeploy it independently of the API
+later). A static Vite build — no server needed either way. Two ways to
+host it standalone:
 
 ## No domain yet: Cloud Run
 

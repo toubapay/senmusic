@@ -1,4 +1,13 @@
-# Deploying the API to Cloud Run
+# Deploying the API (+ web/player + web/dashboard) to Cloud Run
+
+This is one consolidated Cloud Run service: the API plus both web SPAs,
+built together from the **repo-root** `Dockerfile` (not `services/api/Dockerfile`,
+which is only for local `docker compose`) and served at `/`, `/app`, and
+`/dashboard` respectively. Run §6's deploy command from the repo root, not
+from `services/api/` like the rest of this doc's commands — the build needs
+to see `web/player/` and `web/dashboard/` too. See root `DEPLOY.md`'s "One
+Cloud Run service" section for why, and `web/player/DEPLOY.md` /
+`web/dashboard/DEPLOY.md` if you'd rather deploy either standalone instead.
 
 Assumes `gcloud` is authenticated and `gcloud config set project $PROJECT_ID`
 is already set. Region used throughout: `europe-west1` (same as the
@@ -49,6 +58,9 @@ described in the header comment of `lib/cdn-signer.js`.
 ```bash
 printf '%s' "$(openssl rand -base64 48)" | gcloud secrets create jwt-secret --data-file=-
 printf '%s' "$(openssl rand -base64 48)" | gcloud secrets create stream-token-secret --data-file=-
+# Guards POST /internal/royalties/run (routes/internal.js) — see §6's
+# royalties note; Cloud Scheduler sends this back as a header.
+printf '%s' "$(openssl rand -base64 32)" | gcloud secrets create internal-secret --data-file=-
 printf '%s' "$CDN_KEY_B64"                | gcloud secrets create cdn-key-b64 --data-file=-
 printf '%s' "$PAYDUNYA_MASTER_KEY"        | gcloud secrets create paydunya-master-key --data-file=-
 printf '%s' "$PAYDUNYA_PRIVATE_KEY"       | gcloud secrets create paydunya-private-key --data-file=-
@@ -109,6 +121,11 @@ production to build the indexes and settings.
 
 ## 6. Deploy
 
+Run this from the **repo root** (`cd ../..` first if you've been following
+along from `services/api/`) — `--source .` here means the whole repo, so
+the root `Dockerfile` can build `web/player` and `web/dashboard` alongside
+the API:
+
 ```bash
 gcloud run deploy promusic-api \
   --source . \
@@ -116,13 +133,37 @@ gcloud run deploy promusic-api \
   --service-account promusic-api@$PROJECT_ID.iam.gserviceaccount.com \
   --add-cloudsql-instances "$INSTANCE_CONNECTION_NAME" \
   --allow-unauthenticated \
-  --set-env-vars ORIGINALS_BUCKET=promusic-originals-$PROJECT_ID,HLS_BUCKET=promusic-hls-$PROJECT_ID,API_BASE_URL=https://api.yourdomain.sn,APP_BASE_URL=https://app.yourdomain.sn,ARTIST_DASHBOARD_URL=https://dashboard.yourdomain.sn,CDN_BASE_URL=https://cdn.yourdomain.sn,CDN_KEY_NAME=stream-key-1,MEILI_HOST=$MEILI_HOST,PAYDUNYA_MODE=live \
-  --set-secrets DATABASE_URL=database-url:latest,JWT_SECRET=jwt-secret:latest,STREAM_TOKEN_SECRET=stream-token-secret:latest,CDN_KEY_B64=cdn-key-b64:latest,PAYDUNYA_MASTER_KEY=paydunya-master-key:latest,PAYDUNYA_PRIVATE_KEY=paydunya-private-key:latest,PAYDUNYA_TOKEN=paydunya-token:latest
+  --set-env-vars ORIGINALS_BUCKET=promusic-originals-$PROJECT_ID,HLS_BUCKET=promusic-hls-$PROJECT_ID,API_BASE_URL=https://api.yourdomain.sn,APP_BASE_URL=https://api.yourdomain.sn,ARTIST_DASHBOARD_URL=https://api.yourdomain.sn,CDN_BASE_URL=https://cdn.yourdomain.sn,CDN_KEY_NAME=stream-key-1,MEILI_HOST=$MEILI_HOST,PAYDUNYA_MODE=live \
+  --set-secrets DATABASE_URL=database-url:latest,JWT_SECRET=jwt-secret:latest,STREAM_TOKEN_SECRET=stream-token-secret:latest,INTERNAL_SECRET=internal-secret:latest,CDN_KEY_B64=cdn-key-b64:latest,PAYDUNYA_MASTER_KEY=paydunya-master-key:latest,PAYDUNYA_PRIVATE_KEY=paydunya-private-key:latest,PAYDUNYA_TOKEN=paydunya-token:latest
 ```
 
 `--allow-unauthenticated` is correct here (unlike the transcoder): this
-service is the public API every client talks to. Auth is enforced per-route
-by `requireAuth` (`lib/auth.js`), not at the Cloud Run/IAM layer.
+service is the public API every client talks to, and now also serves
+`web/player` at `/app` and `web/dashboard` at `/dashboard`. Auth is
+enforced per-route by `requireAuth` (`lib/auth.js`) for the API and by the
+`X-Internal-Secret` header for `/internal/*` (see below), not at the Cloud
+Run/IAM layer. `APP_BASE_URL`/`ARTIST_DASHBOARD_URL` both equal
+`API_BASE_URL` above because they're the same origin now — if you deploy
+either web app standalone instead (`web/player/DEPLOY.md` /
+`web/dashboard/DEPLOY.md`), point these at that app's own origin instead.
+
+### Royalties (replaces the old standalone Cloud Run job)
+
+```bash
+gcloud scheduler jobs create http royalties-monthly \
+  --location europe-west1 \
+  --schedule "0 4 2 * *" --time-zone "Africa/Dakar" \
+  --uri "https://api.yourdomain.sn/internal/royalties/run" \
+  --http-method POST \
+  --headers "X-Internal-Secret=$(gcloud secrets versions access latest --secret=internal-secret),Content-Type=application/json" \
+  --message-body "{}"
+```
+
+Runs at 04:00 on the 2nd of each month for the month just ended, calling
+`POST /internal/royalties/run` (`routes/internal.js`), which runs
+`lib/compute-royalties.js` — same formula as the original
+`services/royalties-job/compute-royalties.js` (now deprecated, kept only
+for reference), just invoked in-process instead of as a separate job.
 
 ## 7. Domain + verify
 
@@ -136,4 +177,7 @@ curl https://api.yourdomain.sn/healthz
 If `APP_BASE_URL`/`ARTIST_DASHBOARD_URL` are wrong, requests from the deployed
 web apps fail as CORS errors in the browser console, not as API errors —
 check those two env vars first if a deployed frontend can't reach the API
-but `curl`/the test console can.
+but `curl`/the test console can. In the consolidated setup this mostly
+applies only if you've split a web app back out to its own origin; visit
+`https://api.yourdomain.sn/app` and `/dashboard` to verify both SPAs
+themselves loaded correctly from this one service.
